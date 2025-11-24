@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import confetti from 'canvas-confetti';
-import { Home, RefreshCw, Calendar } from 'lucide-react';
+import { Trophy, ArrowLeft, Swords, Target, Star } from 'lucide-react';
+import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
 export default function BattleResult() {
@@ -24,7 +25,7 @@ export default function BattleResult() {
     const fetchResult = async () => {
         try {
             const res = await axios.get(`/api/battles/${battleId}`, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
+                headers: { Authorization: `Bearer ${session?.access_token} ` }
             });
             setBattle(res.data);
 
@@ -67,15 +68,16 @@ export default function BattleResult() {
             });
             // Reload to show pending rematch UI
             window.location.reload();
-        } catch (error) {
-            alert("Failed to start rematch.");
+        } catch (error: any) {
+            console.error('Failed to start rematch:', error);
+            toast.error("Failed to start rematch");
         }
     };
 
     const handleAcceptRematch = async () => {
         if (!pendingRematch?.battle_id) {
             console.error("No pending rematch battle_id:", pendingRematch);
-            alert("Error: No pending rematch found");
+            toast.error("No pending rematch found");
             return;
         }
 
@@ -83,10 +85,11 @@ export default function BattleResult() {
             await axios.post(`/api/battles/${pendingRematch.battle_id}/accept`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
+            toast.success("Rematch accepted! Good luck!");
             navigate('/dashboard');
         } catch (error: any) {
-            console.error("Accept rematch error:", error.response?.data || error);
-            alert(`Failed to accept rematch: ${error.response?.data?.detail || error.message}`);
+            console.error('Failed to accept rematch:', error);
+            toast.error(`Failed to accept rematch: ${error.response?.data?.detail || error.message}`);
         }
     };
 
@@ -99,7 +102,7 @@ export default function BattleResult() {
             });
             window.location.reload();
         } catch (error) {
-            alert("Failed to decline rematch.");
+            toast.error("Failed to decline rematch.");
         }
     };
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import {
     Trophy, Flame, Shield, Zap, Check, Plus,
     Clock, User, Lock, Upload, AlertTriangle
@@ -75,7 +76,7 @@ export default function Dashboard() {
                 // Assuming we can't undo for now or need undo endpoint.
                 // For MVP, let's assume complete is one-way or add undo endpoint later.
                 // Reverting optimistic update if not supported
-                alert("Undoing tasks is not yet supported by the protocol.");
+                toast.error("Undoing tasks is not yet supported by the protocol.");
                 setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !isCompleted } : t));
             }
         } catch (error) {

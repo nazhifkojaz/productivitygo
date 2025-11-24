@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -7,7 +7,9 @@ import UserDashboard from './pages/UserDashboard';
 import axios from 'axios';
 import PlanTasks from './pages/PlanTasks';
 import Profile from './pages/Profile';
+import PublicProfile from './pages/PublicProfile';
 import { OpenAPI } from './api';
+import { Toaster } from 'sonner';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -72,8 +74,10 @@ function App() {
           <Route path="/dashboard" element={<ProtectedRoute><BattleRouter /></ProtectedRoute>} />
           <Route path="/plan" element={<ProtectedRoute><PlanTasks /></ProtectedRoute>} />
           <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
+          <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        <Toaster position="top-right" richColors closeButton />
       </AuthProvider>
     </Router>
   );

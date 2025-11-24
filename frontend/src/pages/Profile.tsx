@@ -5,6 +5,13 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Edit2, X, Save, LogOut, User, ArrowLeft, Key, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
+
+const EMOJI_OPTIONS = [
+    '😀', '😃', '😄', '😎', '🤓', '🥳', '🤩', '😊', '🤗', '🤔',
+    '🐶', '🐱', '🐼', '🐯', '🦁', '🐸', '🦊', '🦉', '🐔', '🐵',
+    '🎮', '🎯', '🎲', '⚡', '🔥', '💎', '🏆', '🌟', '⭐', '👾'
+];
 
 export default function Profile() {
     const { user, session, signOut } = useAuth();
@@ -12,6 +19,8 @@ export default function Profile() {
     const [isEditing, setIsEditing] = useState(false);
     const [username, setUsername] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [selectedEmoji, setSelectedEmoji] = useState('😀');
     const [profileData, setProfileData] = useState<any>(null);
 
     // Password Change State
@@ -33,6 +42,7 @@ export default function Profile() {
             });
             setProfileData(response.data);
             setUsername(response.data.username || '');
+            setSelectedEmoji(response.data.avatar_emoji || '😀');
         } catch (error) {
             console.error("Failed to load profile", error);
         }
@@ -43,34 +53,57 @@ export default function Profile() {
         setLoading(true);
         try {
             await axios.put('/api/users/profile',
-                { username },
+                { username, avatar_emoji: selectedEmoji },
                 { headers: { Authorization: `Bearer ${session.access_token}` } }
             );
             setIsEditing(false);
             loadProfile();
+            toast.success("Profile updated successfully!");
         } catch (error) {
             console.error("Failed to update profile", error);
-            alert("Failed to update profile.");
+            toast.error("Failed to update profile");
         } finally {
             setLoading(false);
         }
     };
 
+    const handleSelectEmoji = async (emoji: string) => {
+        setSelectedEmoji(emoji);
+        setShowEmojiPicker(false);
+
+        // Save immediately
+        if (!session?.access_token) return;
+        try {
+            await axios.put('/api/users/profile',
+                { avatar_emoji: emoji },
+                { headers: { Authorization: `Bearer ${session.access_token}` } }
+            );
+            toast.success("Avatar updated!");
+            loadProfile();
+        } catch (error) {
+            console.error("Failed to update avatar", error);
+            toast.error("Failed to update avatar");
+        }
+    };
+
     const handleChangePassword = async () => {
         if (newPassword !== confirmPassword) {
-            alert("Passwords do not match!");
+            toast.error("Passwords do not match!");
             return;
         }
         setLoading(true);
         try {
             const { error } = await supabase.auth.updateUser({ password: newPassword });
-            if (error) throw error;
-            alert("Password updated successfully!");
+            if (error) {
+                throw error;
+            }
+            toast.success("Password updated successfully!");
             setIsChangingPassword(false);
             setNewPassword('');
             setConfirmPassword('');
         } catch (error: any) {
-            alert(error.message);
+            console.error("Failed to update password", error);
+            toast.error(error.message);
         } finally {
             setLoading(false);
         }
@@ -107,8 +140,12 @@ export default function Profile() {
                     </button>
 
                     <div className="flex flex-col md:flex-row items-center gap-8">
-                        <div className="w-32 h-32 bg-neo-accent border-3 border-black rounded-full flex items-center justify-center shadow-neo-sm flex-shrink-0">
-                            <User className="w-16 h-16" />
+                        <div
+                            className="w-32 h-32 bg-neo-accent border-3 border-black rounded-full flex items-center justify-center shadow-neo-sm flex-shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => setShowEmojiPicker(true)}
+                            title="Click to change avatar"
+                        >
+                            <span className="text-6xl">{selectedEmoji}</span>
                         </div>
 
                         <div className="text-center md:text-left flex-1">
@@ -259,6 +296,50 @@ export default function Profile() {
                                 >
                                     {loading ? 'Saving...' : <><Save className="w-5 h-5" /> Save Changes</>}
                                 </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Emoji Picker Modal */}
+            <AnimatePresence>
+                {showEmojiPicker && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+                        onClick={() => setShowEmojiPicker(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9 }}
+                            animate={{ scale: 1 }}
+                            exit={{ scale: 0.9 }}
+                            className="bg-neo-white border-4 border-black shadow-neo max-w-md w-full p-6"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-xl font-black uppercase">Choose Your Avatar</h2>
+                                <button
+                                    onClick={() => setShowEmojiPicker(false)}
+                                    className="p-2 hover:bg-gray-100 border-2 border-black"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-5 gap-3">
+                                {EMOJI_OPTIONS.map((emoji) => (
+                                    <button
+                                        key={emoji}
+                                        onClick={() => handleSelectEmoji(emoji)}
+                                        className={`text-4xl p-3 border-3 border-black hover:bg-neo-accent transition-all active:scale-95 ${selectedEmoji === emoji ? 'bg-neo-primary' : 'bg-white'
+                                            }`}
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
                             </div>
                         </motion.div>
                     </motion.div>

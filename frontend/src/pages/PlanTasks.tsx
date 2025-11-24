@@ -3,6 +3,7 @@ import { ArrowLeft, Lock, Star, Save, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TasksService, type TaskCreate } from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
@@ -109,10 +110,10 @@ export default function PlanTasks() {
             await axios.post('/api/tasks/draft', tasksToSubmit, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
-            alert("Plan saved successfully! You can edit this until midnight.");
+            toast.success("Plan saved successfully! You can edit this until midnight.");
         } catch (error) {
             console.error("Failed to save tasks", error);
-            alert("Failed to save plan.");
+            toast.error("Failed to save plan.");
         } finally {
             setSubmitting(false);
         }
