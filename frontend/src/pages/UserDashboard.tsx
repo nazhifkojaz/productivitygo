@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Search, Swords, Shield, Trophy, Star, Target, Mail, Loader, Users } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, Swords, Shield, Trophy, Star, Target, Mail, Loader, Users, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function UserDashboard() {
@@ -204,6 +205,26 @@ export default function UserDashboard() {
 
     return (
         <div className="min-h-screen bg-neo-bg text-black font-sans p-4 md:p-8 pb-24">
+            {/* Header */}
+            <header className="w-full max-w-6xl mx-auto flex justify-between items-center mb-8">
+                <div className="bg-neo-white border-3 border-black p-4 shadow-neo-sm">
+                    <h1 className="text-2xl font-black italic uppercase">Lobby <span className="text-neo-primary">Station</span></h1>
+                    <div className="text-xs font-bold text-gray-500">
+                        FIND A RIVAL. START A WAR.
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => navigate('/profile')}
+                        className="w-12 h-12 bg-white border-3 border-black shadow-neo flex items-center justify-center"
+                    >
+                        <User className="w-6 h-6" />
+                    </motion.button>
+                </div>
+            </header>
+
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8">
 
                 {/* LEFT COLUMN: Stats & Profile */}
