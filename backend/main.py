@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
-from routers import tasks, battles, users
+from routers import tasks, battles, users, social
 
 app = FastAPI(
     title="ProductivityGO API",
@@ -20,6 +20,7 @@ app.add_middleware(
 app.include_router(tasks.router)
 app.include_router(battles.router)
 app.include_router(users.router)
+app.include_router(social.router)
 
 @app.get("/")
 def read_root():

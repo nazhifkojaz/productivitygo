@@ -77,7 +77,7 @@ async def get_current_battle(user = Depends(get_current_user)):
     rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
     
     # Fetch Rival Profile
-    rival_profile_res = supabase.table("profiles").select("username, level").eq("id", rival_id).execute()
+    rival_profile_res = supabase.table("profiles").select("*").eq("id", rival_id).execute()
     rival_data = rival_profile_res.data[0] if rival_profile_res.data else None
     
     # Fetch Rival's Tasks for Today (Only if IN_BATTLE or LAST_BATTLE_DAY)
@@ -107,14 +107,28 @@ async def get_current_battle(user = Depends(get_current_user)):
             'username': rival_data['username'] if rival_data else 'Unknown Rival',
             'level': rival_data['level'] if rival_data else 1,
             'tasks_total': total_tasks,
-            'tasks_completed': completed_tasks
+            'tasks_completed': completed_tasks,
+            'stats': {
+                'battle_wins': rival_data.get('overall_win_count', 0),
+                'total_xp': rival_data.get('total_xp_earned', 0),
+                'rounds_won': rival_data.get('daily_win_count', 0),
+                'win_rate': f"{rival_data.get('overall_win_rate', 0)}%",
+                'tasks_completed': rival_data.get('completed_tasks', 0)
+            }
         }
     else:
          battle['rival'] = {
             'username': rival_data['username'] if rival_data else 'Unknown Rival',
             'level': rival_data['level'] if rival_data else 1,
             'tasks_total': 0,
-            'tasks_completed': 0
+            'tasks_completed': 0,
+            'stats': {
+                'battle_wins': rival_data.get('overall_win_count', 0) if rival_data else 0,
+                'total_xp': rival_data.get('total_xp_earned', 0) if rival_data else 0,
+                'rounds_won': rival_data.get('daily_win_count', 0) if rival_data else 0,
+                'win_rate': f"{rival_data.get('overall_win_rate', 0)}%" if rival_data else "0%",
+                'tasks_completed': rival_data.get('completed_tasks', 0) if rival_data else 0
+            }
         }
     
     # Calculate Rounds Played
@@ -137,18 +151,18 @@ async def get_invites(user = Depends(get_current_user)):
     return res.data
 
 class InviteRequest(BaseModel):
-    rival_email: str
+    rival_id: str    # User UUID
     start_date: str  # YYYY-MM-DD
     duration: int    # 3-5 days
 
 @router.post("/invite", operation_id="invite_user")
 async def invite_user(invite: InviteRequest, user = Depends(get_current_user)):
-    # 1. Find Rival
-    rival_res = supabase.table("profiles").select("id").eq("email", invite.rival_email).single().execute()
+    # 1. Validate Rival ID exists
+    rival_res = supabase.table("profiles").select("id, username").eq("id", invite.rival_id).single().execute()
     if not rival_res.data:
-        raise HTTPException(status_code=404, detail="Rival not found")
+        raise HTTPException(status_code=404, detail="User not found")
     
-    rival_id = rival_res.data['id']
+    rival_id = invite.rival_id
     
     if rival_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot battle yourself")
@@ -203,6 +217,7 @@ async def invite_user(invite: InviteRequest, user = Depends(get_current_user)):
     res = supabase.table("battles").insert(battle_data).execute()
     
     return {"status": "success", "battle": res.data[0]}
+
 
 @router.post("/{battle_id}/accept", operation_id="accept_battle")
 async def accept_battle(battle_id: str, user = Depends(get_current_user)):

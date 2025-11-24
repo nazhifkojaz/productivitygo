@@ -1,11 +1,12 @@
-import React from 'react';
-import { Shield, Lock } from 'lucide-react';
+import { Shield } from 'lucide-react';
 
 interface RivalRadarProps {
     battle: any;
 }
 
 export default function RivalRadar({ battle }: RivalRadarProps) {
+    const stats = battle?.rival?.stats;
+
     return (
         <aside className="w-full bg-neo-dark text-neo-white border-3 border-black p-6 shadow-neo relative">
             <div className="absolute top-0 right-0 bg-neo-accent text-black px-3 py-1 font-bold border-l-3 border-b-3 border-black text-sm">
@@ -15,17 +16,38 @@ export default function RivalRadar({ battle }: RivalRadarProps) {
                 <Shield className="w-5 h-5" /> Rival Radar
             </h2>
 
-            <div className="bg-gray-800 border-3 border-white p-4 mb-6 text-center">
-                <div className="w-16 h-16 bg-gray-600 rounded-full mx-auto border-3 border-white mb-2 flex items-center justify-center">
-                    <span className="text-2xl">😈</span>
+            {/* Panel 1: Rival Stats */}
+            <div className="bg-gray-800 border-3 border-white p-4 mb-6">
+                <div className="flex items-center gap-4 mb-4 border-b-2 border-gray-600 pb-4">
+                    <div className="w-12 h-12 bg-gray-600 rounded-full border-2 border-white flex items-center justify-center">
+                        <span className="text-xl">😈</span>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-white leading-none">{battle?.rival?.username || 'Rival'}</h3>
+                        <p className="text-neo-secondary font-bold text-xs">Level {battle?.rival?.level || '?'}</p>
+                    </div>
                 </div>
-                <h3 className="text-lg font-bold text-white">{battle?.rival?.username || 'Rival'}</h3>
-                <p className="text-neo-secondary font-bold text-xs">Level {battle?.rival?.level || '?'}</p>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-gray-700 p-2 rounded border border-gray-600">
+                        <div className="text-lg font-black text-white">{stats?.battle_wins || 0}</div>
+                        <div className="text-[10px] font-bold uppercase text-gray-400">Wins</div>
+                    </div>
+                    <div className="bg-gray-700 p-2 rounded border border-gray-600">
+                        <div className="text-lg font-black text-white">{stats?.total_xp || 0}</div>
+                        <div className="text-[10px] font-bold uppercase text-gray-400">XP</div>
+                    </div>
+                    <div className="bg-gray-700 p-2 rounded border border-gray-600">
+                        <div className="text-lg font-black text-white">{stats?.rounds_won || 0}</div>
+                        <div className="text-[10px] font-bold uppercase text-gray-400">Rounds</div>
+                    </div>
+                </div>
             </div>
 
+            {/* Panel 2: Battle Progress */}
             <div className="space-y-4">
                 <div className="flex justify-between items-center text-xs font-bold uppercase">
-                    <span>Progress</span>
+                    <span>Daily Progress</span>
                     <span>{battle?.rival?.tasks_completed || 0}/{battle?.rival?.tasks_total || 0} Tasks</span>
                 </div>
                 <div className="w-full h-4 bg-gray-700 border-3 border-white relative">
@@ -35,10 +57,12 @@ export default function RivalRadar({ battle }: RivalRadarProps) {
                     ></div>
                 </div>
 
-                <div className="mt-4 p-3 bg-gray-800 border-2 border-dashed border-gray-500 text-center">
-                    <Lock className="w-6 h-6 mx-auto text-gray-500 mb-1" />
-                    <p className="text-gray-400 font-bold text-xs">
-                        DATA ENCRYPTED
+                <div className="mt-4 p-3 bg-gray-800 border-2 border-dashed border-gray-500 flex items-center gap-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <p className="text-gray-300 font-bold text-xs">
+                        {battle?.rival?.tasks_completed > 0
+                            ? `Rival finished ${battle.rival.tasks_completed} task(s) today!`
+                            : "Rival hasn't started yet..."}
                     </p>
                 </div>
             </div>
