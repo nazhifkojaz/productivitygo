@@ -34,12 +34,12 @@ export default function RivalRadar({ battle }: RivalRadarProps) {
                         <div className="text-[10px] font-bold uppercase text-gray-400">Wins</div>
                     </div>
                     <div className="bg-gray-700 p-2 rounded border border-gray-600">
-                        <div className="text-lg font-black text-white">{stats?.total_xp || 0}</div>
-                        <div className="text-[10px] font-bold uppercase text-gray-400">XP</div>
+                        <div className="text-lg font-black text-white">{stats?.battle_fought || 0}</div>
+                        <div className="text-[10px] font-bold uppercase text-gray-400">Battles</div>
                     </div>
                     <div className="bg-gray-700 p-2 rounded border border-gray-600">
-                        <div className="text-lg font-black text-white">{stats?.rounds_won || 0}</div>
-                        <div className="text-[10px] font-bold uppercase text-gray-400">Rounds</div>
+                        <div className="text-lg font-black text-white">{stats?.total_xp || 0}</div>
+                        <div className="text-[10px] font-bold uppercase text-gray-400">XP</div>
                     </div>
                 </div>
             </div>

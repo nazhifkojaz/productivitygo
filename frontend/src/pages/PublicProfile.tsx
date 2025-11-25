@@ -169,9 +169,9 @@ export default function PublicProfile() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <StatCard icon={<Trophy className="w-6 h-6" />} label="Battle Wins" value={profile.stats.battle_wins} />
-                    <StatCard icon={<Star className="w-6 h-6" />} label="Total XP" value={profile.stats.total_xp} />
-                    <StatCard icon={<Shield className="w-6 h-6" />} label="Rounds Won" value={profile.stats.rounds_won} />
+                    <StatCard icon={<Shield className="w-6 h-6" />} label="Battle Fought" value={profile.stats.battle_fought} />
                     <StatCard icon={<Target className="w-6 h-6" />} label="Tasks Done" value={profile.stats.tasks_completed} />
+                    <StatCard icon={<Star className="w-6 h-6" />} label="Total XP" value={profile.stats.total_xp} />
                 </div>
 
                 {/* Match History */}

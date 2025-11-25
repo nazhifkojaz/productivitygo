@@ -173,8 +173,8 @@ export default function Profile() {
                             <div className="text-xs font-bold uppercase text-gray-500">Total XP</div>
                         </div>
                         <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors">
-                            <div className="text-3xl font-black">{profileData?.stats?.rounds_won || 0}</div>
-                            <div className="text-xs font-bold uppercase text-gray-500">Rounds Won</div>
+                            <div className="text-3xl font-black">{profileData?.stats?.battle_fought || 0}</div>
+                            <div className="text-xs font-bold uppercase text-gray-500">Battle Fought</div>
                         </div>
                         <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors">
                             <div className="text-3xl font-black">{profileData?.stats?.win_rate || '0%'}</div>

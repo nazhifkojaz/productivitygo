@@ -248,8 +248,8 @@ export default function UserDashboard() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <StatBox label="Wins" value={profile?.stats?.battle_wins} icon={<Trophy className="w-4 h-4" />} />
+                            <StatBox label="Battles" value={profile?.stats?.battle_fought} icon={<Shield className="w-4 h-4" />} />
                             <StatBox label="XP" value={profile?.stats?.total_xp} icon={<Star className="w-4 h-4" />} />
-                            <StatBox label="Rounds" value={profile?.stats?.rounds_won} icon={<Shield className="w-4 h-4" />} />
                             <StatBox label="Tasks" value={profile?.stats?.tasks_completed} icon={<Target className="w-4 h-4" />} />
                         </div>
                     </div>
