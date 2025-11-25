@@ -31,7 +31,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Battle Router Wrapper
 const BattleRouter = () => {
   const { session } = useAuth();
-  const [hasActiveBattle, setHasActiveBattle] = useState<boolean | null>(null);
+  const [battleState, setBattleState] = useState<'loading' | 'lobby' | 'active' | 'completed'>('loading');
+  const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,12 +40,33 @@ const BattleRouter = () => {
       if (session?.access_token) {
         OpenAPI.TOKEN = session.access_token;
         try {
-          await axios.get('/api/battles/current', {
+          const profileResponse = await axios.get('/api/users/profile', {
             headers: { Authorization: `Bearer ${session.access_token}` }
           });
-          setHasActiveBattle(true);
+
+          const currentBattleId = profileResponse.data.current_battle;
+
+          if (!currentBattleId) {
+            setBattleState('lobby');
+            setLoading(false);
+            return;
+          }
+
+          // Fetch the battle to check its status
+          const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          });
+
+          setBattleId(currentBattleId);
+
+          if (battleResponse.data.status === 'completed') {
+            setBattleState('completed');
+          } else {
+            setBattleState('active');
+          }
         } catch (error) {
-          setHasActiveBattle(false);
+          console.error('Failed to check battle state:', error);
+          setBattleState('lobby');
         } finally {
           setLoading(false);
         }
@@ -55,9 +77,15 @@ const BattleRouter = () => {
 
   if (loading) return <div className="h-screen flex items-center justify-center font-black text-2xl">SYNCING...</div>;
 
-  // If active battle -> Go to Arena (Dashboard)
-  // If no active battle -> Go to Lobby (UserDashboard)
-  return hasActiveBattle ? <Dashboard /> : <UserDashboard />;
+  if (battleState === 'completed' && battleId) {
+    return <Navigate to={`/battle-result/${battleId}`} replace />;
+  }
+
+  if (battleState === 'active') {
+    return <Dashboard />;
+  }
+
+  return <UserDashboard />;
 };
 
 import BattleResult from './pages/BattleResult';

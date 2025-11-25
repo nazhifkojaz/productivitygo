@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     Trophy, Flame, Shield, Zap, Check, Plus,
-    Clock, User, Lock, Upload, AlertTriangle
+    Clock, User, Lock, Upload, AlertTriangle, Flag
 } from 'lucide-react';
 import RivalRadar from '../components/RivalRadar';
 
@@ -101,12 +101,27 @@ export default function Dashboard() {
             });
             window.location.reload();
         } catch (error) {
-            alert("Failed to accept invite.");
+            toast.error("Failed to accept invite.");
+        }
+    };
+
+    const handleForfeit = async () => {
+        if (!confirm("Are you sure you want to surrender? This will end the battle immediately and count as a loss.")) return;
+
+        try {
+            await axios.post(`/api/battles/${battle.id}/forfeit`, {}, {
+                headers: { Authorization: `Bearer ${session?.access_token}` }
+            });
+            toast.success("Battle forfeited.");
+            navigate(`/battle-result/${battle.id}`);
+        } catch (error) {
+            console.error("Failed to forfeit", error);
+            toast.error("Failed to forfeit battle.");
         }
     };
 
     return (
-        <div className="min-h-screen bg-neo-bg p-4 md:p-8 pb-24 flex flex-col items-center">
+        <div className="min-h-screen bg-neo-bg p-4 md:p-8 pb-48 flex flex-col items-center">
             {/* Header */}
             <header className="w-full max-w-3xl flex justify-between items-center mb-8">
                 <div className="bg-neo-white border-3 border-black p-4 shadow-neo-sm">
@@ -121,9 +136,12 @@ export default function Dashboard() {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => navigate('/profile')}
                         className="w-12 h-12 bg-white border-3 border-black shadow-neo flex items-center justify-center"
+                        title="My Profile"
                     >
                         <User className="w-6 h-6" />
                     </motion.button>
+
+
                 </div>
             </header>
 
@@ -231,6 +249,22 @@ export default function Dashboard() {
                     </div>
                 )}
             </div>
+
+            {/* Danger Zone: Surrender */}
+            {!isPending && (
+                <div className="w-full max-w-3xl mt-8 mb-12 flex justify-center">
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleForfeit}
+                        className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white font-bold border-3 border-black shadow-neo hover:bg-red-600 transition-colors"
+                        title="Surrender Battle"
+                    >
+                        <Flag className="w-5 h-5 fill-white" />
+                        SURRENDER
+                    </motion.button>
+                </div>
+            )}
 
             {/* Debug Controls */}
             <div className="fixed bottom-6 left-6 flex flex-col gap-4 z-50">

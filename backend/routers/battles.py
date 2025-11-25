@@ -109,10 +109,10 @@ async def get_current_battle(user = Depends(get_current_user)):
             'tasks_total': total_tasks,
             'tasks_completed': completed_tasks,
             'stats': {
-                'battle_wins': rival_data.get('overall_win_count', 0),
+                'battle_wins': rival_data.get('battle_win_count', 0),
                 'total_xp': rival_data.get('total_xp_earned', 0),
-                'rounds_won': rival_data.get('daily_win_count', 0),
-                'win_rate': f"{rival_data.get('overall_win_rate', 0)}%",
+                'battle_fought': rival_data.get('battle_count', 0),
+                'win_rate': f"{rival_data.get('battle_win_rate', 0)}%",
                 'tasks_completed': rival_data.get('completed_tasks', 0)
             }
         }
@@ -123,10 +123,10 @@ async def get_current_battle(user = Depends(get_current_user)):
             'tasks_total': 0,
             'tasks_completed': 0,
             'stats': {
-                'battle_wins': rival_data.get('overall_win_count', 0) if rival_data else 0,
+                'battle_wins': rival_data.get('battle_win_count', 0) if rival_data else 0,
                 'total_xp': rival_data.get('total_xp_earned', 0) if rival_data else 0,
-                'rounds_won': rival_data.get('daily_win_count', 0) if rival_data else 0,
-                'win_rate': f"{rival_data.get('overall_win_rate', 0)}%" if rival_data else "0%",
+                'battle_fought': rival_data.get('battle_count', 0) if rival_data else 0,
+                'win_rate': f"{rival_data.get('battle_win_rate', 0)}%" if rival_data else "0%",
                 'tasks_completed': rival_data.get('completed_tasks', 0) if rival_data else 0
             }
         }
@@ -157,6 +157,20 @@ class InviteRequest(BaseModel):
 
 @router.post("/invite", operation_id="invite_user")
 async def invite_user(invite: InviteRequest, user = Depends(get_current_user)):
+    """
+    Create a new battle invite.
+    
+    - Validates the rival exists and is not the same as the inviter
+    - Creates a pending battle with specified start date and duration
+    - Sets current_battle for both users upon acceptance
+    
+    Args:
+        invite: InviteRequest containing rival_id, start_date, and duration
+        user: Current authenticated user (inviter)
+    
+    Returns:
+        Battle details with status "pending"
+    """
     # 1. Validate Rival ID exists
     rival_res = supabase.table("profiles").select("id, username").eq("id", invite.rival_id).single().execute()
     if not rival_res.data:
@@ -221,6 +235,20 @@ async def invite_user(invite: InviteRequest, user = Depends(get_current_user)):
 
 @router.post("/{battle_id}/accept", operation_id="accept_battle")
 async def accept_battle(battle_id: str, user = Depends(get_current_user)):
+    """
+    Accept a pending battle invite.
+    
+    - Verifies the user is the invitee (user2)
+    - Changes battle status from 'pending' to 'active'
+    - Sets current_battle for both participants
+    
+    Args:
+        battle_id: UUID of the battle to accept
+        user: Current authenticated user (must be invitee)
+    
+    Returns:
+        Updated battle data
+    """
     # Verify user is the invitee
     battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
     if not battle_res.data:
@@ -235,10 +263,29 @@ async def accept_battle(battle_id: str, user = Depends(get_current_user)):
         
     # Update status to active
     res = supabase.table("battles").update({"status": "active"}).eq("id", battle_id).execute()
+    
+    # Update current_battle for BOTH users
+    supabase.table("profiles").update({"current_battle": battle_id}).eq("id", battle['user1_id']).execute()
+    supabase.table("profiles").update({"current_battle": battle_id}).eq("id", battle['user2_id']).execute()
+    
     return res.data
 
 @router.post("/{battle_id}/reject", operation_id="reject_battle")
 async def reject_battle(battle_id: str, user = Depends(get_current_user)):
+    """
+    Reject or cancel a battle invite.
+    
+    - Invitee can reject an invitation
+    - Inviter can cancel their own invitation
+    - Deletes the battle entirely
+    
+    Args:
+        battle_id: UUID of the battle to reject/cancel
+        user: Current authenticated user
+    
+    Returns:
+        Status confirmation
+    """
     # Verify user is the invitee OR inviter (can cancel own invite)
     battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
     if not battle_res.data:
@@ -251,6 +298,103 @@ async def reject_battle(battle_id: str, user = Depends(get_current_user)):
     # Delete the battle/invite
     supabase.table("battles").delete().eq("id", battle_id).execute()
     return {"status": "rejected"}
+
+@router.post("/{battle_id}/forfeit", operation_id="forfeit_battle")
+async def forfeit_battle(battle_id: str, user = Depends(get_current_user)):
+    """
+    Forfeit an active battle, instantly ending it and awarding victory to the rival.
+    
+    - Only works on active battles (not pending or already completed)
+    - Sets the other participant as winner
+    - Increments winner's battle_wins stat
+    - Keeps current_battle set so users stay on battle result screen
+    
+    Args:
+        battle_id: UUID of the battle to forfeit
+        user: Current authenticated user (the one forfeiting)
+    
+    Returns:
+        Status and winner_id
+    """
+    # 1. Verify Battle
+    battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+    if not battle_res.data:
+        raise HTTPException(status_code=404, detail="Battle not found")
+        
+    battle = battle_res.data[0]
+    if battle['status'] != 'active':
+        raise HTTPException(status_code=400, detail="Can only forfeit active battles")
+        
+    if battle['user1_id'] != user.id and battle['user2_id'] != user.id:
+        raise HTTPException(status_code=403, detail="Not a participant in this battle")
+        
+    # 2. Determine Winner (The OTHER person)
+    winner_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
+    
+    # 3. Update Battle to Completed
+    today_iso = date.today().isoformat()
+    
+    update_data = {
+        "status": "completed",
+        "winner_id": winner_id,
+        "end_date": today_iso
+    }
+    
+    # Update battle status first
+    try:
+        supabase.table("battles").update(update_data).eq("id", battle_id).execute()
+        print(f"Battle {battle_id} marked as completed, winner: {winner_id}")
+    except Exception as e:
+        print(f"Failed to update battle status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update battle status: {str(e)}")
+    
+    # Update winner's battle_win_count column directly
+    try:
+        # First get current count
+        profile_res = supabase.table("profiles").select("battle_win_count, battle_count").eq("id", winner_id).single().execute()
+        print(f"Fetched winner profile: {profile_res.data}")
+        
+        if profile_res.data:
+            current_wins = profile_res.data.get('battle_win_count') or 0
+            current_fights = profile_res.data.get('battle_count') or 0
+            new_wins = current_wins + 1
+            new_fights = current_fights + 1
+            print(f"Incrementing battle_win_count from {current_wins} to {new_wins}")
+            
+            # Update the column directly
+            update_res = supabase.table("profiles").update({"battle_win_count": new_wins, "battle_count": new_fights}).eq("id", winner_id).execute()
+            print(f"Stats update result: {update_res.data}")
+        else:
+            print(f"No profile found for winner {winner_id}")
+    except Exception as e:
+        # Log the error but don't fail the forfeit - battle is already completed
+        print(f"Warning: Failed to update winner stats: {e}")
+        print(f"Exception type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+    
+    return {"status": "forfeited", "winner_id": winner_id}
+
+@router.post("/{battle_id}/leave", operation_id="leave_battle")
+async def leave_battle(battle_id: str, user = Depends(get_current_user)):
+    """
+    Leave a battle result screen (End Campaign / Decline Rematch).
+    
+    - Clears the current_battle field for the user
+    - Allows user to return to lobby after viewing results
+    
+    Args:
+        battle_id: UUID of the battle to leave
+        user: Current authenticated user
+    
+    Returns:
+        Status confirmation
+    """
+    try:
+        supabase.table("profiles").update({"current_battle": None}).eq("id", user.id).execute()
+        return {"status": "left"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to leave battle: {str(e)}")
 
 import hashlib
 

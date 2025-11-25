@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import confetti from 'canvas-confetti';
-import { Trophy, ArrowLeft, Swords, Target, Star } from 'lucide-react';
+import { Trophy, ArrowLeft, Swords, Target, Star, Calendar, Home, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
@@ -58,7 +58,15 @@ export default function BattleResult() {
 
     const handleEndCampaign = async () => {
         if (!confirm("End this campaign and return to lobby?")) return;
-        navigate('/dashboard');
+        try {
+            await axios.post(`/api/battles/${battleId}/leave`, {}, {
+                headers: { Authorization: `Bearer ${session?.access_token}` }
+            });
+            navigate('/dashboard');
+        } catch (error) {
+            console.error('Failed to leave battle:', error);
+            navigate('/dashboard'); // Navigate anyway
+        }
     };
 
     const handleRematch = async () => {
@@ -100,7 +108,11 @@ export default function BattleResult() {
             await axios.post(`/api/battles/${pendingRematch.battle_id}/decline`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
-            window.location.reload();
+            // Also leave the battle to clear current_battle
+            await axios.post(`/api/battles/${battleId}/leave`, {}, {
+                headers: { Authorization: `Bearer ${session?.access_token}` }
+            });
+            navigate('/dashboard');
         } catch (error) {
             toast.error("Failed to decline rematch.");
         }
