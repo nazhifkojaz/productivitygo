@@ -2,6 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from database import supabase
 from typing import Optional
+from dependencies import get_current_user
+from utils.rank_calculations import (
+    calculate_rank,
+    get_next_rank_requirements,
+    get_xp_progress,
+    calculate_level_from_xp
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -59,17 +66,74 @@ def get_profile(user = Depends(get_current_user)):
         # Streak: Count consecutive days of task completion (This requires task history, complex).
         # For MVP, let's just return 0 placeholders but explicitly in the API so frontend doesn't guess.
         
+        battle_count = profile.get('battle_count', 0)
+        battle_win_count = profile.get('battle_win_count', 0)
+        win_rate = round((battle_win_count / battle_count) * 100, 1) if battle_count > 0 else 0
+        
+        # Calculate rank
+        level = profile.get('level', 1)
+        rank = calculate_rank(level, battle_count, battle_win_count)
+
         profile["stats"] = {
-            "battle_wins": profile.get("battle_win_count", 0),
+            "battle_wins": battle_win_count,
             "total_xp": profile.get("total_xp_earned", 0),
-            "battle_fought": profile.get("battle_count", 0),
-            "win_rate": f"{profile.get('battle_win_rate', 0)}%",
+            "battle_fought": battle_count,
+            "win_rate": f"{win_rate}%",
             "tasks_completed": profile.get("completed_tasks", 0)
         }
+        profile["rank"] = rank
         
         return profile
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rank-info", operation_id="get_rank_info")
+async def get_rank_info(user = Depends(get_current_user)):
+    """
+    Get user's rank, level, XP progress, and rank-up requirements.
+    """
+    try:
+        # Fetch user profile stats
+        profile = supabase.table("profiles").select(
+            "level, total_xp_earned, battle_count, battle_win_count"
+        ).eq("id", user.id).single().execute()
+        
+        if not profile.data:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        
+        data = profile.data
+        total_xp = data.get('total_xp_earned', 0)
+        battle_count = data.get('battle_count', 0)
+        battle_win_count = data.get('battle_win_count', 0)
+        
+        # Calculate level from XP (in case stored level is stale)
+        current_level = calculate_level_from_xp(total_xp)
+        
+        # Calculate rank based on level and battle stats
+        rank = calculate_rank(current_level, battle_count, battle_win_count)
+        
+        # Get XP progress toward next level
+        xp_progress = get_xp_progress(total_xp)
+        
+        # Get rank-up requirements
+        rank_up_req = get_next_rank_requirements(
+            rank, 
+            current_level, 
+            battle_count, 
+            battle_win_count
+        )
+        
+        return {
+            "rank": rank,
+            "level": current_level,
+            "xp": total_xp,
+            "xp_progress": xp_progress,
+            "rank_up_requirements": rank_up_req
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/{identifier}/public_profile", operation_id="get_public_profile")
 async def get_public_profile(identifier: str, current_user = Depends(get_current_user)):
@@ -82,7 +146,7 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
     def fetch_profile_data(user_id: str):
         """Fetch profile with retry on connection errors"""
         return supabase.table("profiles").select(
-            "id, username, level, email, avatar_emoji, battle_win_count, total_xp_earned, battle_count, battle_win_rate, completed_tasks"
+            "id, username, level, email, avatar_emoji, battle_win_count, total_xp_earned, battle_count, completed_tasks"
         ).eq("id", user_id).single().execute()
     
     try:
@@ -110,14 +174,20 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
         if not profile:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Check if following
+        # Check if current user follows this profile
         is_following = False
-        follow_check = supabase.table("follows").select("created_at")\
-            .eq("follower_id", current_user.id)\
-            .eq("following_id", user_id)\
-            .execute()
+        follow_check = supabase.table("follows").select("follower_id").eq("follower_id", current_user.id).eq("following_id", user_id).execute()
         if follow_check.data:
             is_following = True
+
+        # Calculate win rate from counts
+        battle_count = profile.get('battle_count', 0)
+        battle_win_count = profile.get('battle_win_count', 0)
+        win_rate = round((battle_win_count / battle_count) * 100, 1) if battle_count > 0 else 0
+        
+        # Calculate rank
+        level = profile.get('level', 1)
+        rank = calculate_rank(level, battle_count, battle_win_count)
 
         # Fetch Match History (Last 5 battles)
         battles_res = supabase.table("battles").select("*")\
@@ -129,12 +199,23 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
             
         match_history = battles_res.data
 
+        # Collect unique rival IDs
+        rival_ids = set()
+        for battle in match_history:
+            rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
+            rival_ids.add(rival_id)
+
+        # Batch fetch all rivals in single query (fixes N+1 issue)
+        rivals_map = {}
+        if rival_ids:
+            rivals_res = supabase.table("profiles").select("id, username").in_("id", list(rival_ids)).execute()
+            rivals_map = {r['id']: r['username'] for r in rivals_res.data}
+
         # Enrich match history with rival names
         enriched_history = []
         for battle in match_history:
             rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
-            rival_res = supabase.table("profiles").select("username").eq("id", rival_id).single().execute()
-            rival_name = rival_res.data['username'] if rival_res.data else "Unknown"
+            rival_name = rivals_map.get(rival_id, "Unknown")
             
             result = "DRAW"
             if battle.get('winner_id') == user_id:
@@ -154,14 +235,14 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
             "id": profile['id'],
             "username": profile['username'],
             "level": profile['level'],
-            "avatar_url": None,  # Column doesn't exist yet
+            "rank": rank,
             "avatar_emoji": profile.get('avatar_emoji', '😀'),  # Default to smiley
             "is_following": is_following,
             "stats": {
-                "battle_wins": profile.get("battle_win_count", 0),
-                "total_xp": profile.get("total_xp_earned", 0),
-                "battle_fought": profile.get("battle_count", 0),
-                "win_rate": f"{profile.get('battle_win_rate', 0)}%",
+                "battle_wins": battle_win_count,
+                "total_xp": profile.get('total_xp_earned', 0),
+                "battle_fought": battle_count,
+                "win_rate": f"{win_rate}%",
                 "tasks_completed": profile.get("completed_tasks", 0)
             },
             "match_history": enriched_history
