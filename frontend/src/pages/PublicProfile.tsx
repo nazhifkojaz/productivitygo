@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Shield, Swords, ArrowLeft, Trophy, Star, Target, X, Loader, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import RankBadge from '../components/RankBadge';
 
 export default function PublicProfile() {
     const { userId } = useParams();
@@ -141,7 +142,10 @@ export default function PublicProfile() {
                         </div>
 
                         <div className="text-center md:text-left flex-1">
-                            <h2 className="text-3xl font-black uppercase mb-2">{profile.username}</h2>
+                            <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                                <h2 className="text-3xl font-black uppercase">{profile.username}</h2>
+                                {profile.rank && <RankBadge rank={profile.rank} level={profile.level} size="medium" showLabel={false} />}
+                            </div>
                             <div className="flex flex-wrap gap-3 justify-center md:justify-start">
                                 {user?.id !== profile.id && (
                                     <>

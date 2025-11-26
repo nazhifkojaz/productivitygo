@@ -122,6 +122,13 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-neo-bg p-4 md:p-8 pb-48 flex flex-col items-center">
+            {/* Desktop Sidebar (Hidden on Mobile) */}
+            <div className="hidden md:flex flex-col fixed left-0 top-0 bottom-0 w-64 bg-neo-white border-r-3 border-black p-6 z-40">
+                <div className="flex items-center gap-3 font-black italic uppercase text-xl tracking-tighter mb-10">
+                    <img src="/logo.svg" alt="Logo" className="w-10 h-10" />
+                    <span>Productivity<span className="text-neo-primary">GO</span></span>
+                </div>
+            </div>
             {/* Header */}
             <header className="w-full max-w-3xl flex justify-between items-center mb-8">
                 <div className="bg-neo-white border-3 border-black p-4 shadow-neo-sm">
@@ -265,64 +272,6 @@ export default function Dashboard() {
                     </motion.button>
                 </div>
             )}
-
-            {/* Debug Controls */}
-            <div className="fixed bottom-6 left-6 flex flex-col gap-4 z-50">
-                <div className="bg-black text-white px-3 py-1 text-xs font-bold rounded-full text-center border-2 border-white shadow-lg">
-                    ROUND {battle?.rounds_played || 0} / 5
-                </div>
-
-                {/* End Day (Simulate) - Hide if Pre-Battle or Pending */}
-                {!isPreBattle && !isPending && (
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={async () => {
-                            if (!battle) return;
-                            if (confirm("Simulate End of Day? This will calculate daily XP.")) {
-                                try {
-                                    await axios.post(`/api/battles/${battle.id}/daily-round`, {}, {
-                                        headers: { Authorization: `Bearer ${session?.access_token}` }
-                                    });
-                                    alert("Day Completed! XP Awarded. You can now check your stats or plan for tomorrow.");
-                                    window.location.reload();
-                                } catch (e) {
-                                    alert("Failed to calculate round.");
-                                }
-                            }
-                        }}
-                        className="w-14 h-14 bg-yellow-400 text-black border-3 border-black rounded-full shadow-neo flex items-center justify-center"
-                        title="Simulate End Day"
-                    >
-                        <Clock className="w-8 h-8" />
-                    </motion.button>
-                )}
-
-                {/* End Battle (Final) - Only show if 5 rounds played */}
-                {(battle?.rounds_played || 0) >= 5 && (
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={async () => {
-                            if (!battle) return;
-                            if (confirm("End Battle? This will declare the overall winner.")) {
-                                try {
-                                    await axios.post(`/api/battles/${battle.id}/complete`, {}, {
-                                        headers: { Authorization: `Bearer ${session?.access_token}` }
-                                    });
-                                    navigate(`/battle-result/${battle.id}`);
-                                } catch (e) {
-                                    alert("Failed to end battle.");
-                                }
-                            }
-                        }}
-                        className="w-14 h-14 bg-red-500 text-white border-3 border-black rounded-full shadow-neo flex items-center justify-center"
-                        title="End Battle (Final)"
-                    >
-                        <Trophy className="w-8 h-8" />
-                    </motion.button>
-                )}
-            </div>
-        </div>
+        </main>
     );
 }

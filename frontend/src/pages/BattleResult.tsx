@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { Trophy, ArrowLeft, Swords, Target, Star, Calendar, Home, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import RankBadge from '../components/RankBadge';
 
 export default function BattleResult() {
     const { battleId } = useParams();
@@ -158,18 +159,28 @@ export default function BattleResult() {
                 <div className={`bg-neo-white border-3 border-black p-6 shadow-neo flex flex-col items-center ${isWinner ? 'bg-yellow-100' : ''}`}>
                     <h2 className="text-2xl font-black mb-2">YOU</h2>
                     <div className="text-6xl font-black text-neo-primary mb-2">{myScore} XP</div>
-                    <div className="text-sm font-bold bg-black text-white px-3 py-1 rounded-full">
-                        LEVEL {isUser1 ? user1.level : user2.level}
-                    </div>
+                    {(isUser1 ? user1.rank : user2.rank) && (
+                        <RankBadge
+                            rank={isUser1 ? user1.rank : user2.rank}
+                            level={isUser1 ? user1.level : user2.level}
+                            size="small"
+                            showLabel={false}
+                        />
+                    )}
                 </div>
 
                 {/* Rival Score */}
                 <div className="bg-neo-secondary border-3 border-black p-6 shadow-neo flex flex-col items-center opacity-90">
                     <h2 className="text-2xl font-black mb-2">{rivalName.toUpperCase()}</h2>
                     <div className="text-6xl font-black text-gray-700 mb-2">{rivalScore} XP</div>
-                    <div className="text-sm font-bold bg-black text-white px-3 py-1 rounded-full">
-                        LEVEL {isUser1 ? user2.level : user1.level}
-                    </div>
+                    {(isUser1 ? user2.rank : user1.rank) && (
+                        <RankBadge
+                            rank={isUser1 ? user2.rank : user1.rank}
+                            level={isUser1 ? user2.level : user1.level}
+                            size="small"
+                            showLabel={false}
+                        />
+                    )}
                 </div>
             </div>
 

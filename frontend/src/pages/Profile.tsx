@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Edit2, X, Save, LogOut, User, ArrowLeft, Key, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import RankBadge from '../components/RankBadge';
 
 const EMOJI_OPTIONS = [
     '😀', '😃', '😄', '😎', '🤓', '🥳', '🤩', '😊', '🤗', '🤔',
@@ -149,7 +150,10 @@ export default function Profile() {
                         </div>
 
                         <div className="text-center md:text-left flex-1">
-                            <h2 className="text-3xl font-black uppercase mb-1">{profileData?.username || 'Challenger'}</h2>
+                            <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
+                                <h2 className="text-3xl font-black uppercase">{profileData?.username || 'Challenger'}</h2>
+                                {profileData?.rank && <RankBadge rank={profileData.rank} level={profileData.level} size="medium" showLabel={false} />}
+                            </div>
                             <p className="text-gray-500 font-bold mb-4">{user?.email}</p>
 
                             <div className="flex gap-2 justify-center md:justify-start">
