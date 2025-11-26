@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" /> <!-- Violet -->
+      <stop offset="100%" style="stop-color:#6D28D9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Notebook Body -->
+  <!-- Back cover/Pages depth -->
+  <rect x="90" y="70" width="340" height="400" rx="20" ry="20" fill="#FFF" stroke="#000" stroke-width="12" />
+  <rect x="90" y="70" width="320" height="400" rx="20" ry="20" fill="#DDD" stroke="#000" stroke-width="12" />
+  
+  <!-- Front Cover -->
+  <rect x="80" y="60" width="320" height="400" rx="20" ry="20" fill="url(#grad4)" stroke="#000" stroke-width="12" />
+  
+  <!-- Binding/Spine detail on left -->
+  <rect x="80" y="60" width="40" height="400" rx="20" ry="20" fill="rgba(0,0,0,0.2)" />
+
+  <!-- Crossed Swords on Cover -->
+  <g transform="translate(240, 260)">
+    <!-- Sword 1 (Top-Left to Bottom-Right) -->
+    <g transform="rotate(45)">
+      <rect x="-15" y="-120" width="30" height="180" fill="#E2E8F0" stroke="#000" stroke-width="6" /> <!-- Blade -->
+      <rect x="-35" y="60" width="70" height="15" rx="5" fill="#475569" stroke="#000" stroke-width="6" /> <!-- Guard -->
+      <rect x="-10" y="75" width="20" height="50" rx="5" fill="#1E293B" stroke="#000" stroke-width="6" /> <!-- Handle -->
+      <circle cx="0" cy="135" r="12" fill="#F59E0B" stroke="#000" stroke-width="6" /> <!-- Pommel -->
+    </g>
+    
+    <!-- Sword 2 (Top-Right to Bottom-Left) -->
+    <g transform="rotate(-45)">
+      <rect x="-15" y="-120" width="30" height="180" fill="#E2E8F0" stroke="#000" stroke-width="6" /> <!-- Blade -->
+      <rect x="-35" y="60" width="70" height="15" rx="5" fill="#475569" stroke="#000" stroke-width="6" /> <!-- Guard -->
+      <rect x="-10" y="75" width="20" height="50" rx="5" fill="#1E293B" stroke="#000" stroke-width="6" /> <!-- Handle -->
+      <circle cx="0" cy="135" r="12" fill="#F59E0B" stroke="#000" stroke-width="6" /> <!-- Pommel -->
+    </g>
+  </g>
+</svg>

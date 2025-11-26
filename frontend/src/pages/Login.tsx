@@ -45,6 +45,9 @@ export default function Login() {
                     BETA ACCESS
                 </div>
 
+                <div className="flex justify-center mb-4">
+                    <img src="/logo.svg" alt="ProductivityGo Logo" className="w-24 h-24" />
+                </div>
                 <h1 className="text-4xl font-black italic uppercase mb-2 text-center">
                     Productivity<span className="text-neo-primary">GO</span>
                 </h1>

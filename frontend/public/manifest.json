@@ -1,0 +1,22 @@
+{
+    "name": "ProductivityGo",
+    "short_name": "ProdGo",
+    "description": "Gamified Task Battle App",
+    "theme_color": "#ffffff",
+    "background_color": "#ffffff",
+    "display": "standalone",
+    "icons": [
+        {
+            "src": "/logo.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        },
+        {
+            "src": "/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ],
+    "start_url": "/",
+    "scope": "/"
+}
