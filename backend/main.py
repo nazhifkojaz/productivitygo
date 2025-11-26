@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
 from routers import tasks, battles, users, social
+from scheduler import start_scheduler, shutdown_scheduler
 
 app = FastAPI(
     title="ProductivityGO API",
@@ -21,6 +22,16 @@ app.include_router(tasks.router)
 app.include_router(battles.router)
 app.include_router(users.router)
 app.include_router(social.router)
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background scheduler on app startup"""
+    start_scheduler()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop background scheduler on app shutdown"""
+    shutdown_scheduler()
 
 @app.get("/")
 def read_root():

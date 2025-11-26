@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
+import pytz
 from pydantic import BaseModel
 
 from database import supabase
@@ -37,41 +38,126 @@ async def get_current_battle(user = Depends(get_current_user)):
     # (Usually there's only one, but if multiple, take latest ending)
     battle = max(res.data, key=lambda b: b['end_date'])
     
-    # Determine App State
-    today = date.today()
     start_date = date.fromisoformat(battle['start_date'])
     end_date = date.fromisoformat(battle['end_date'])
+
+    # --- LAZY EVALUATION TRIGGER (Backup) ---
+    # Process any pending rounds using shared utility
+    # The scheduler handles this hourly, but this acts as a backup
+    if battle['status'] == 'active':
+        from utils.battle_processor import process_battle_rounds
+        rounds_processed = process_battle_rounds(battle)
+        if rounds_processed > 0:
+            # Reload battle to get updated status/current_round
+            battle_reload = supabase.table("battles").select("*").eq("id", battle['id']).single().execute()
+            if battle_reload.data:
+                battle = battle_reload.data
+
+    # Determine App State based on USER LOCAL TIME
+    # Fetch user profile for timezone
+    profile_res = supabase.table("profiles").select("timezone").eq("id", user.id).single().execute()
+    user_tz = profile_res.data['timezone'] if profile_res.data else "UTC"
+    
+    try:
+        user_today = datetime.now(pytz.timezone(user_tz)).date()
+    except:
+        user_today = datetime.now(pytz.utc).date()
     
     if battle['status'] == 'pending':
         app_state = 'PENDING_ACCEPTANCE'
     elif battle['status'] == 'completed':
         app_state = 'BATTLE_END'
-    elif today < start_date:
+    elif user_today < start_date:
         app_state = 'PRE_BATTLE'
-    elif today > end_date:
+    elif user_today > end_date:
         app_state = 'BATTLE_END'
     else:
         # Use current_round and duration for precise state
-        current_round = battle.get('current_round', 0)
-        duration = battle.get('duration', 5)
-        
-        if current_round >= duration:
-            app_state = 'LAST_BATTLE_DAY' # Or BATTLE_END if logic dictates, but usually LAST_BATTLE_DAY is for the final day itself
-            # Actually, if current_round == duration, it means 5 rounds played? 
-            # No, rounds_played starts at 0. 
-            # If rounds_played == 5, battle is over.
-            # Let's stick to date logic for LAST_BATTLE_DAY for now to be safe, 
-            # but use rounds for progress display.
-            if today == end_date:
-                app_state = 'LAST_BATTLE_DAY'
-            else:
-                app_state = 'IN_BATTLE'
-        elif today == end_date:
+        # But for UI, we just care if we are in the date range
+        if user_today == end_date:
              app_state = 'LAST_BATTLE_DAY'
         else:
             app_state = 'IN_BATTLE'
         
     battle['app_state'] = app_state
+    duration = battle.get('duration', 5)
+    current_round = battle.get('current_round', 0)
+
+    # --- LAZY EVALUATION TRIGGER (FAIR MODE) ---
+    # Only process rounds when the date has passed for BOTH players.
+    
+    # 1. Get Timezones
+    # We already have user's timezone from context or profile fetch?
+    # We need to fetch both profiles to be sure.
+    user1_profile = supabase.table("profiles").select("timezone").eq("id", battle['user1_id']).single().execute()
+    user2_profile = supabase.table("profiles").select("timezone").eq("id", battle['user2_id']).single().execute()
+    
+    tz1 = user1_profile.data['timezone'] if user1_profile.data else "UTC"
+    tz2 = user2_profile.data['timezone'] if user2_profile.data else "UTC"
+    
+    # 2. Helper to get local date
+    def get_local_date(tz_str):
+        try:
+            return datetime.now(pytz.timezone(tz_str)).date()
+        except:
+            return datetime.now(pytz.utc).date()
+            
+    date1 = get_local_date(tz1)
+    date2 = get_local_date(tz2)
+    
+    # The "effective" date for the battle is the EARLIEST of the two local dates.
+    # i.e., We can only finalize a day if it has passed for the person "furthest behind" in time.
+    # Wait, no. If I am in Tokyo (Tue) and you are in NY (Mon).
+    # Day 1 (Mon) has passed for me. Has it passed for you? No.
+    # So we cannot finalize Day 1 yet.
+    # So we take the MINIMUM of the two dates to see "what date has definitely passed for everyone".
+    # Actually, we check if round_date < date1 AND round_date < date2.
+    
+    if battle['status'] == 'active':
+        days_since_start = (user_today - start_date).days # This is just a rough upper bound
+        rounds_to_process = min(days_since_start, duration)
+        
+        if current_round < rounds_to_process:
+            # print(f"Lazy Eval Check: Round {current_round}. User1 Date: {date1}, User2 Date: {date2}")
+            
+            for r in range(current_round, rounds_to_process):
+                round_date = start_date + timedelta(days=r)
+                
+                # CRITICAL CHECK: Has this date passed for BOTH users?
+                # A date D is "passed" if local_date > D.
+                if date1 > round_date and date2 > round_date:
+                    print(f"Processing round {r} (Date {round_date}) - Passed for both.")
+                    try:
+                        supabase.rpc("calculate_daily_round", {
+                            "battle_uuid": battle['id'],
+                            "round_date": round_date.isoformat()
+                        }).execute()
+                        
+                        current_round += 1
+                        supabase.table("battles").update({"current_round": current_round}).eq("id", battle['id']).execute()
+                    except Exception as e:
+                        print(f"Error in lazy evaluation for round {r}: {e}")
+                        break
+                else:
+                    # print(f"Round {r} ({round_date}) not yet passed for both. Waiting.")
+                    break
+            
+            battle['current_round'] = current_round
+
+        # Check for Battle Completion
+        if current_round >= duration:
+            print("Lazy Eval: Battle finished, marking as completed")
+            try:
+                # Call complete_battle logic
+                # We can call the RPC directly
+                result = supabase.rpc("complete_battle", {"battle_uuid": battle['id']}).execute()
+                if result.data:
+                    battle['status'] = 'completed'
+                    # We might want to reload the battle to get the winner_id etc, 
+                    # but for now just updating status is enough to trigger the frontend to show "BATTLE_END"
+            except Exception as e:
+                 print(f"Error auto-completing battle: {e}")
+
     
     # Determine Rival ID
     rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
@@ -110,9 +196,9 @@ async def get_current_battle(user = Depends(get_current_user)):
             'tasks_completed': completed_tasks,
             'stats': {
                 'battle_wins': rival_data.get('battle_win_count', 0),
-                'total_xp': rival_data.get('total_xp_earned', 0),
-                'battle_fought': rival_data.get('battle_count', 0),
-                'win_rate': f"{rival_data.get('battle_win_rate', 0)}%",
+                'level': rival_data.get('level', 1),
+                'xp': rival_data.get('total_xp_earned', 0),
+                'win_rate': f"{round((rival_data.get('battle_win_count', 0) / rival_data.get('battle_count', 1)) * 100, 1) if rival_data.get('battle_count', 0) > 0 else  0}%",
                 'tasks_completed': rival_data.get('completed_tasks', 0)
             }
         }
@@ -124,9 +210,9 @@ async def get_current_battle(user = Depends(get_current_user)):
             'tasks_completed': 0,
             'stats': {
                 'battle_wins': rival_data.get('battle_win_count', 0) if rival_data else 0,
-                'total_xp': rival_data.get('total_xp_earned', 0) if rival_data else 0,
-                'battle_fought': rival_data.get('battle_count', 0) if rival_data else 0,
-                'win_rate': f"{rival_data.get('battle_win_rate', 0)}%" if rival_data else "0%",
+                'level': rival_data.get('level', 1) if rival_data else 1,
+                'xp': rival_data.get('total_xp_earned', 0) if rival_data else 0,
+                'win_rate': f"{round((rival_data.get('battle_win_count', 0) / rival_data.get('battle_count', 1)) * 100, 1) if rival_data and rival_data.get('battle_count', 0) > 0 else 0}%",
                 'tasks_completed': rival_data.get('completed_tasks', 0) if rival_data else 0
             }
         }
@@ -331,7 +417,7 @@ async def forfeit_battle(battle_id: str, user = Depends(get_current_user)):
     # 2. Determine Winner (The OTHER person)
     winner_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
     
-    # 3. Update Battle to Completed
+    # 3. Process the updated data
     today_iso = date.today().isoformat()
     
     update_data = {
@@ -339,39 +425,31 @@ async def forfeit_battle(battle_id: str, user = Depends(get_current_user)):
         "winner_id": winner_id,
         "end_date": today_iso
     }
+
+    # 3.1 winner data update
+    winner_profile = supabase.table("profiles").select("battle_win_count, battle_count").eq("id", winner_id).single().execute()
+    if winner_profile.data:
+        updated_win_count = winner_profile.data.get('battle_win_count') + 1
+        updated_battle_count = winner_profile.data.get('battle_count') + 1
+
+    # 3.2 loser/user data update
+    loser_profile = supabase.table("profiles").select("battle_count").eq("id", user.id).single().execute()
+    if loser_profile.data:
+        updated_battle_count = loser_profile.data.get('battle_count') + 1
     
-    # Update battle status first
+    # Update data
     try:
         supabase.table("battles").update(update_data).eq("id", battle_id).execute()
         print(f"Battle {battle_id} marked as completed, winner: {winner_id}")
+
+        supabase.table("profiles").update({"battle_win_count": updated_win_count, "battle_count": updated_battle_count}).eq("id", winner_id).execute()
+        print(f"Updated winner {winner_id} profile: {updated_win_count} wins, {updated_battle_count} battles")
+
+        supabase.table("profiles").update({"battle_count": updated_battle_count}).eq("id", user.id).execute()
+        print(f"Updated loser {user.id} profile: {updated_battle_count} battles")
     except Exception as e:
         print(f"Failed to update battle status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update battle status: {str(e)}")
-    
-    # Update winner's battle_win_count column directly
-    try:
-        # First get current count
-        profile_res = supabase.table("profiles").select("battle_win_count, battle_count").eq("id", winner_id).single().execute()
-        print(f"Fetched winner profile: {profile_res.data}")
-        
-        if profile_res.data:
-            current_wins = profile_res.data.get('battle_win_count') or 0
-            current_fights = profile_res.data.get('battle_count') or 0
-            new_wins = current_wins + 1
-            new_fights = current_fights + 1
-            print(f"Incrementing battle_win_count from {current_wins} to {new_wins}")
-            
-            # Update the column directly
-            update_res = supabase.table("profiles").update({"battle_win_count": new_wins, "battle_count": new_fights}).eq("id", winner_id).execute()
-            print(f"Stats update result: {update_res.data}")
-        else:
-            print(f"No profile found for winner {winner_id}")
-    except Exception as e:
-        # Log the error but don't fail the forfeit - battle is already completed
-        print(f"Warning: Failed to update winner stats: {e}")
-        print(f"Exception type: {type(e).__name__}")
-        import traceback
-        traceback.print_exc()
     
     return {"status": "forfeited", "winner_id": winner_id}
 
@@ -437,9 +515,16 @@ async def complete_battle(battle_id: str, user = Depends(get_current_user)):
 @router.post("/{battle_id}/daily-round", operation_id="calculate_daily_round")
 async def calculate_round(battle_id: str, round_date: str = None, user = Depends(get_current_user)):
     """
-    Calculate daily round for a specific date (for demo/testing).
-    In production, this would be triggered automatically at end of day.
+    [DEBUG ONLY] Manually calculate daily round for a specific date.
+    This endpoint is only available when DEBUG_MODE=true in .env
+    
+    Used for testing and development to simulate day progression.
+    In production, rounds are processed automatically via the scheduler.
     """
+    from config import DEBUG_MODE
+    if not DEBUG_MODE:
+        raise HTTPException(status_code=404, detail="Endpoint not available in production mode")
+    
     # 1. Verify Battle
     battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
     if not battle_res.data:
@@ -482,6 +567,7 @@ async def calculate_round(battle_id: str, round_date: str = None, user = Depends
             raise HTTPException(status_code=500, detail="Failed to calculate round")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculating round: {str(e)}")
+
 
 @router.get("/{battle_id}", operation_id="get_battle_details")
 async def get_battle_details(battle_id: str, user = Depends(get_current_user)):
