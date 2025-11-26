@@ -66,8 +66,11 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
     mandatory_tasks = [t for t in tasks if not t.is_optional]
     optional_tasks = [t for t in tasks if t.is_optional]
     
-    if len(mandatory_tasks) != quota:
-        raise HTTPException(status_code=400, detail=f"You must submit exactly {quota} mandatory tasks for this date.")
+    if len(mandatory_tasks) > quota:
+        raise HTTPException(status_code=400, detail=f"You cannot submit more than {quota} mandatory tasks.")
+    
+    if len(mandatory_tasks) == 0 and len(optional_tasks) == 0:
+         raise HTTPException(status_code=400, detail="You must submit at least one task.")
         
     if len(optional_tasks) > 2:
         raise HTTPException(status_code=400, detail="You can only submit up to 2 optional tasks.")

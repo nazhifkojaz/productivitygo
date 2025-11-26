@@ -16,20 +16,31 @@ export default function PlanTasks() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [timeLeft, setTimeLeft] = useState<string>("");
+    const [userTimezone, setUserTimezone] = useState<string>("UTC");
 
     useEffect(() => {
         if (session?.access_token) {
             loadData();
         }
+    }, [session]);
 
-        // Countdown Timer
+    // Countdown Timer - separate effect to use userTimezone
+    useEffect(() => {
         const timer = setInterval(() => {
+            // Calculate midnight in user's timezone
             const now = new Date();
-            const tomorrow = new Date(now);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(0, 0, 0, 0);
 
-            const diff = tomorrow.getTime() - now.getTime();
+            // Get current time in user's timezone
+            const userNowStr = now.toLocaleString('en-US', { timeZone: userTimezone });
+            const userNow = new Date(userNowStr);
+
+            // Calculate tomorrow midnight in user's timezone
+            const tomorrowMidnight = new Date(userNow);
+            tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
+            tomorrowMidnight.setHours(0, 0, 0, 0);
+
+            // Calculate difference
+            const diff = tomorrowMidnight.getTime() - userNow.getTime();
             const hours = Math.floor(diff / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((diff % (1000 * 60)) / 1000);
@@ -38,11 +49,17 @@ export default function PlanTasks() {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [session]);
+    }, [userTimezone]);
 
     const loadData = async () => {
         if (!session?.access_token) return;
         try {
+            // 0. Get user profile for timezone
+            const profileRes = await axios.get('/api/users/profile', {
+                headers: { Authorization: `Bearer ${session.access_token}` }
+            });
+            setUserTimezone(profileRes.data.timezone || 'UTC');
+
             // 1. Get Quota
             const quotaRes = await axios.get('/api/tasks/quota', {
                 headers: { Authorization: `Bearer ${session.access_token}` }
@@ -95,7 +112,8 @@ export default function PlanTasks() {
         setOptionalTasks(newTasks);
     };
 
-    const isValid = mandatoryTasks.every(t => t.trim().length > 0);
+    // Relaxed validation: Allow saving if at least one task (mandatory or optional) is filled
+    const isValid = mandatoryTasks.some(t => t.trim().length > 0) || optionalTasks.some(t => t.trim().length > 0);
 
     const handleSave = async () => {
         if (!isValid) return;
@@ -175,7 +193,7 @@ export default function PlanTasks() {
                         </AnimatePresence>
                     </div>
                     <p className="mt-4 text-xs font-bold text-gray-500 text-center">
-                        * The system has assigned {quota} mandatory slots for tomorrow. All must be filled.
+                        * Up to {quota} mandatory tasks available. Fill at least one to save.
                     </p>
                 </section>
 
