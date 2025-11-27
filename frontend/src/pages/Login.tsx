@@ -46,7 +46,7 @@ export default function Login() {
                 </div>
 
                 <div className="flex justify-center mb-4">
-                    <img src="/logo.svg" alt="ProductivityGo Logo" className="w-24 h-24" />
+                    <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="ProductivityGo Logo" className="w-24 h-24" />
                 </div>
                 <h1 className="text-4xl font-black italic uppercase mb-2 text-center">
                     Productivity<span className="text-neo-primary">GO</span>

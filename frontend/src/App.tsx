@@ -18,10 +18,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, loading } = useAuth();
 
   useEffect(() => {
-    // Set API Base URL
-    OpenAPI.BASE = import.meta.env.VITE_API_URL || "/api";
     if (session?.access_token) {
       OpenAPI.TOKEN = session.access_token;
+      // Also update axios for manual calls
+      axios.defaults.headers.common['Authorization'] = `Bearer ${session.access_token}`;
     }
   }, [session]);
 
