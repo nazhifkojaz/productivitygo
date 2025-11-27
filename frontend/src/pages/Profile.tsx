@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, X, Save, LogOut, User, ArrowLeft, Key, Shield } from 'lucide-react';
+import { Edit2, X, Save, LogOut, ArrowLeft, Key, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
