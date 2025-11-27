@@ -6,19 +6,41 @@ import { motion } from 'framer-motion';
 import { Search, Swords, Shield, Trophy, Star, Target, Mail, Loader, Users, User } from 'lucide-react';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
+import StatBox from '../components/StatBox';
+import TabButton from '../components/TabButton';
+import UserListItem from '../components/UserListItem';
+import { useProfile } from '../hooks/useProfile';
+import { useBattleInvites } from '../hooks/useBattleInvites';
+import { useFollowing } from '../hooks/useFollowing';
+import { useFollowers } from '../hooks/useFollowers';
+import { useUserSearch } from '../hooks/useUserSearch';
+import { useSocialMutations } from '../hooks/useSocialMutations';
+import { useBattleMutations } from '../hooks/useBattleMutations';
 
 export default function UserDashboard() {
     const { session } = useAuth();
     const navigate = useNavigate();
-    const [profile, setProfile] = useState<any>(null);
-    const [invites, setInvites] = useState<any[]>([]);
+
+    // React Query hooks - replaces all manual data fetching
+    const { data: profile } = useProfile();
+    const { data: invites = [] } = useBattleInvites();
+    const { data: following = [] } = useFollowing();
+    const { data: followers = [] } = useFollowers();
+    const { followMutation, unfollowMutation } = useSocialMutations();
+    const { acceptInviteMutation, rejectInviteMutation } = useBattleMutations();
 
     // Social State
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [following, setFollowing] = useState<any[]>([]);
-    const [followers, setFollowers] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'following' | 'followers' | 'search'>('following');
+
+    // Debounce search query
+    const [debouncedQuery, setDebouncedQuery] = useState('');
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const { data: searchResults = [] } = useUserSearch(debouncedQuery);
 
     // Invite State
     const [searchEmail, setSearchEmail] = useState('');
@@ -27,124 +49,18 @@ export default function UserDashboard() {
     const [loading, setLoading] = useState(false);
     const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
-
-    // Load all data in parallel for faster page load
-    const loadAllData = async () => {
-        try {
-            const [profileRes, invitesRes, followingRes, followersRes] = await Promise.all([
-                axios.get('/api/users/profile', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                }),
-                axios.get('/api/battles/invites', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                }),
-                axios.get('/api/social/following', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                }),
-                axios.get('/api/social/followers', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                })
-            ]);
-
-            setProfile(profileRes.data);
-            setInvites(invitesRes.data);
-            setFollowing(followingRes.data);
-            setFollowers(followersRes.data);
-        } catch (error) {
-            console.error("Failed to load data", error);
-        }
-    };
-
-    useEffect(() => {
-        if (session?.access_token) {
-            loadAllData();
-        }
-    }, [session]);
-
-    // Keep individual loaders for manual refresh
-    const loadProfile = async () => {
-        try {
-            const response = await axios.get('/api/users/profile', {
-                headers: { Authorization: `Bearer ${session?.access_token} ` }
-            });
-            setProfile(response.data);
-        } catch (error) {
-            console.error("Failed to load profile", error);
-        }
-    };
-
-    const loadInvites = async () => {
-        try {
-            const response = await axios.get('/api/battles/invites', {
-                headers: { Authorization: `Bearer ${session?.access_token} ` }
-            });
-            setInvites(response.data);
-        } catch (error) {
-            console.error("Failed to load invites", error);
-        }
-    };
-
-    const loadFollowing = async () => {
-        try {
-            const response = await axios.get('/api/social/following', {
-                headers: { Authorization: `Bearer ${session?.access_token} ` }
-            });
-            setFollowing(response.data);
-        } catch (error) {
-            console.error("Failed to load following", error);
-        }
-    };
-
-    const loadFollowers = async () => {
-        try {
-            const response = await axios.get('/api/social/followers', {
-                headers: { Authorization: `Bearer ${session?.access_token} ` }
-            });
-            setFollowers(response.data);
-        } catch (error) {
-            console.error("Failed to load followers", error);
-        }
-    };
-
     const handleFollowToggle = async (userId: string, isCurrentlyFollowing: boolean) => {
         try {
             if (isCurrentlyFollowing) {
-                await axios.delete(`/api/social/unfollow/${userId}`, {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
+                await unfollowMutation.mutateAsync(userId);
             } else {
-                await axios.post(`/api/social/follow/${userId}`, {}, {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
+                await followMutation.mutateAsync(userId);
             }
-            // Refresh lists
-            loadFollowing();
-            loadFollowers();
         } catch (error) {
             console.error("Follow toggle failed", error);
+            toast.error("Failed to update follow status");
         }
     };
-
-    // Debounced search to prevent API spam
-    useEffect(() => {
-        if (searchQuery.length < 2) {
-            setSearchResults([]);
-            return;
-        }
-
-        const timer = setTimeout(async () => {
-            try {
-                const response = await axios.get(`/api/social/search?q=${searchQuery}`, {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
-                setSearchResults(response.data);
-            } catch (error) {
-                console.error("Search failed", error);
-            }
-        }, 300); // 300ms debounce
-
-        return () => clearTimeout(timer);
-    }, [searchQuery, session]);
 
     const handleSearch = (query: string) => {
         setSearchQuery(query);
@@ -191,7 +107,7 @@ export default function UserDashboard() {
             toast.success(`Invite sent to ${rivalUser.username}!`);
             setInviteStatus(`Invite sent to ${rivalUser.username}!`);
             setSearchEmail('');
-            loadInvites();
+            // Invites will auto-refresh via React Query
         } catch (error: any) {
             console.error('Failed to send invite:', error);
             const errorDetail = error.response?.data?.detail;
@@ -202,13 +118,9 @@ export default function UserDashboard() {
     };
 
     const handleAccept = async (battleId: string) => {
-        if (!session?.access_token) return;
         try {
-            await axios.post(`/api/battles/${battleId}/accept`, {}, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
+            await acceptInviteMutation.mutateAsync(battleId);
             toast.success("Battle accepted! Good luck!");
-            loadInvites();
             window.location.reload();
         } catch (error) {
             console.error("Failed to accept", error);
@@ -217,12 +129,8 @@ export default function UserDashboard() {
     };
 
     const handleReject = async (battleId: string) => {
-        if (!session?.access_token) return;
         try {
-            await axios.post(`/api/battles/${battleId}/reject`, {}, {
-                headers: { Authorization: `Bearer ${session.access_token}` }
-            });
-            loadInvites();
+            await rejectInviteMutation.mutateAsync(battleId);
         } catch (error) {
             console.error("Failed to reject", error);
         }
@@ -291,7 +199,7 @@ export default function UserDashboard() {
                                 <Mail className="w-5 h-5" /> Pending Invites
                             </h3>
                             <div className="space-y-3">
-                                {invites.map((invite) => (
+                                {invites.map((invite: any) => (
                                     <div key={invite.id} className="bg-white border-3 border-black p-3">
                                         <div className="font-bold mb-1">VS {invite.user1?.username || 'Unknown'}</div>
                                         <div className="text-xs font-bold text-gray-500 mb-2">
@@ -417,7 +325,7 @@ export default function UserDashboard() {
                             {activeTab === 'following' && (
                                 <div className="space-y-3">
                                     {following.length > 0 ? (
-                                        following.map(f => (
+                                        following.map((f: any) => (
                                             <UserListItem
                                                 key={f.id}
                                                 user={f}
@@ -437,8 +345,8 @@ export default function UserDashboard() {
                             {activeTab === 'followers' && (
                                 <div className="space-y-3">
                                     {followers.length > 0 ? (
-                                        followers.map(f => {
-                                            const isFollowingBack = following.some(followed => followed.id === f.id);
+                                        followers.map((f: any) => {
+                                            const isFollowingBack = following.some((followed: any) => followed.id === f.id);
                                             return (
                                                 <UserListItem
                                                     key={f.id}
@@ -470,8 +378,8 @@ export default function UserDashboard() {
                                         />
                                     </div>
                                     <div className="space-y-3">
-                                        {searchResults.map(u => {
-                                            const isFollowingUser = following.some(f => f.id === u.id);
+                                        {searchResults.map((u: any) => {
+                                            const isFollowingUser = following.some((f: any) => f.id === u.id);
                                             return (
                                                 <UserListItem
                                                     key={u.id}
@@ -494,62 +402,6 @@ export default function UserDashboard() {
                     </div>
                 </div>
             </div>
-        </div>
-    );
-}
-
-function StatBox({ label, value, icon }: any) {
-    return (
-        <div className="bg-gray-100 border-2 border-black p-2 text-center">
-            <div className="flex justify-center mb-1 text-gray-600">{icon}</div>
-            <div className="font-black text-lg">{value || 0}</div>
-            <div className="text-[10px] uppercase font-bold text-gray-500">{label}</div>
-        </div>
-    );
-}
-
-function TabButton({ children, active, onClick }: any) {
-    return (
-        <button
-            onClick={onClick}
-            className={`px-4 py-1 font-bold border-2 border-white ${active ? 'bg-neo-primary text-black' : 'bg-transparent text-white hover:bg-white/20'
-                }`}
-        >
-            {children}
-        </button>
-    );
-}
-
-function UserListItem({ user, onProfile, isFollowing, onFollowToggle }: any) {
-    const [loading, setLoading] = useState(false);
-
-    const handleFollowClick = async (e: any) => {
-        e.stopPropagation();
-        setLoading(true);
-        await onFollowToggle();
-        setLoading(false);
-    };
-
-    return (
-        <div className="bg-white border-3 border-black p-4 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-4 cursor-pointer" onClick={onProfile}>
-                <div className="w-12 h-12 bg-neo-accent rounded-full border-2 border-black flex items-center justify-center">
-                    <span className="text-2xl">{user.avatar_emoji || '😀'}</span>
-                </div>
-                <div>
-                    <div className="font-black text-lg hover:underline">{user.username}</div>
-                    {user.rank && <RankBadge rank={user.rank} level={user.level} size="small" showLabel={false} />}
-                </div>
-            </div>
-            <button
-                onClick={handleFollowClick}
-                disabled={loading}
-                className={`border-2 border-black px-4 py-2 font-bold text-sm transition-colors ${loading ? 'bg-gray-300 cursor-wait' :
-                    isFollowing ? 'bg-red-400 hover:bg-red-500 text-white' : 'bg-neo-primary hover:bg-green-400'
-                    }`}
-            >
-                {loading ? 'Loading...' : isFollowing ? 'UNFOLLOW' : 'FOLLOW'}
-            </button>
         </div>
     );
 }
