@@ -10,7 +10,7 @@ import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
 import { OpenAPI } from './api';
 import { Toaster } from 'sonner';
-
+import { useProfile } from './hooks/useProfile';
 import TimezoneSync from './components/TimezoneSync';
 
 // Protected Route Wrapper
@@ -38,49 +38,46 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Battle Router Wrapper
 const BattleRouter = () => {
   const { session } = useAuth();
+  const { data: profile, isLoading: profileLoading } = useProfile();
   const [battleState, setBattleState] = useState<'loading' | 'lobby' | 'active' | 'completed'>('loading');
   const [battleId, setBattleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkBattle = async () => {
-      if (session?.access_token) {
-        OpenAPI.TOKEN = session.access_token;
-        try {
-          const profileResponse = await axios.get('/api/users/profile', {
-            headers: { Authorization: `Bearer ${session.access_token}` }
-          });
+      if (!profile || profileLoading) return;
 
-          const currentBattleId = profileResponse.data.current_battle;
+      try {
+        const currentBattleId = profile.current_battle;
 
-          if (!currentBattleId) {
-            setBattleState('lobby');
-            setLoading(false);
-            return;
-          }
-
-          // Fetch the battle to check its status
-          const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
-            headers: { Authorization: `Bearer ${session.access_token}` }
-          });
-
-          setBattleId(currentBattleId);
-
-          if (battleResponse.data.status === 'completed') {
-            setBattleState('completed');
-          } else {
-            setBattleState('active');
-          }
-        } catch (error) {
-          console.error('Failed to check battle state:', error);
+        if (!currentBattleId) {
           setBattleState('lobby');
-        } finally {
           setLoading(false);
+          return;
         }
+
+        // Fetch the battle to check its status
+        const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
+          headers: { Authorization: `Bearer ${session?.access_token}` }
+        });
+
+        setBattleId(currentBattleId);
+
+        if (battleResponse.data.status === 'completed') {
+          setBattleState('completed');
+        } else {
+          setBattleState('active');
+        }
+      } catch (error) {
+        console.error('Failed to check battle state:', error);
+        setBattleState('lobby');
+      } finally {
+        setLoading(false);
       }
     };
+
     checkBattle();
-  }, [session]);
+  }, [session, profile, profileLoading]);
 
   if (loading) return <div className="h-screen flex items-center justify-center font-black text-2xl">SYNCING...</div>;
 

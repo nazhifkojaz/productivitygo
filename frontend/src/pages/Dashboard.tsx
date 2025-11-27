@@ -9,6 +9,7 @@ import {
     User, AlertTriangle, Flag
 } from 'lucide-react';
 import RivalRadar from '../components/RivalRadar';
+import { useCurrentBattle } from '../hooks/useCurrentBattle';
 
 interface Task {
     id: string;
@@ -21,16 +22,15 @@ interface Task {
 export default function Dashboard() {
     const { session, user } = useAuth();
     const navigate = useNavigate();
-    const [battle, setBattle] = useState<any>(null);
+    const { data: battle, isLoading, error } = useCurrentBattle();
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [loading, setLoading] = useState(true);
     const [timeUntilBattle, setTimeUntilBattle] = useState<string>('');
 
     useEffect(() => {
-        if (session?.access_token) {
-            fetchDashboardData();
+        if (battle) {
+            fetchTasks();
         }
-    }, [session]);
+    }, [battle]);
 
     // Countdown timer for pre-battle
     useEffect(() => {
@@ -66,34 +66,22 @@ export default function Dashboard() {
         return () => clearInterval(interval);
     }, [battle]);
 
-    const fetchDashboardData = async () => {
-        try {
-            // 1. Get Current Battle
-            const battleRes = await axios.get('/api/battles/current', {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
-            const battleData = battleRes.data;
-            setBattle(battleData);
+    const fetchTasks = async () => {
+        if (!battle) return;
 
-            // 2. Get Today's Tasks (Only if IN_BATTLE or LAST_BATTLE_DAY)
-            if (battleData.app_state === 'IN_BATTLE' || battleData.app_state === 'LAST_BATTLE_DAY') {
+        // 2. Get Today's Tasks (Only if IN_BATTLE or LAST_BATTLE_DAY)
+        if (battle.app_state === 'IN_BATTLE' || battle.app_state === 'LAST_BATTLE_DAY') {
+            try {
                 const tasksRes = await axios.get('/api/tasks/today', {
                     headers: { Authorization: `Bearer ${session?.access_token}` }
                 });
                 setTasks(tasksRes.data);
-            } else {
+            } catch (error) {
+                console.error("Failed to load tasks", error);
                 setTasks([]);
             }
-
-        } catch (error: any) {
-            console.error("Failed to load dashboard", error);
-            if (error.response?.status === 404) {
-                // No active battle -> Show lobby/idle state
-                setBattle(null);
-                setTasks([]);
-            }
-        } finally {
-            setLoading(false);
+        } else {
+            setTasks([]);
         }
     };
 
@@ -121,7 +109,7 @@ export default function Dashboard() {
         }
     };
 
-    if (loading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">INITIALIZING BATTLEFIELD...</div>;
+    if (isLoading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">INITIALIZING BATTLEFIELD...</div>;
 
     const appState = battle?.app_state || 'IN_BATTLE';
     const isPreBattle = appState === 'PRE_BATTLE';
