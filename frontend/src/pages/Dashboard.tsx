@@ -52,9 +52,6 @@ export default function Dashboard() {
             // Get current time in user's timezone to extract offset
             const nowInUserTz = new Date(now.toLocaleString('en-US', { timeZone: userTimezone }));
 
-            // Get the target date at midnight in user's timezone
-            const targetDateInUserTz = new Date(new Date(year, month - 1, day, 0, 0, 0).toLocaleString('en-US', { timeZone: userTimezone }));
-
             // Calculate the offset difference between user's timezone and local timezone
             const localOffset = now.getTime() - new Date(now.toLocaleString('en-US')).getTime();
             const userOffset = now.getTime() - nowInUserTz.getTime();
