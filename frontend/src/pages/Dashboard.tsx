@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import RivalRadar from '../components/RivalRadar';
 import { useCurrentBattle } from '../hooks/useCurrentBattle';
+import { useProfile } from '../hooks/useProfile';
 
 interface Task {
     id: string;
@@ -23,6 +24,7 @@ export default function Dashboard() {
     const { session, user } = useAuth();
     const navigate = useNavigate();
     const { data: battle, isLoading } = useCurrentBattle();
+    const { data: profile } = useProfile();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [timeUntilBattle, setTimeUntilBattle] = useState<string>('');
 
@@ -34,12 +36,35 @@ export default function Dashboard() {
 
     // Countdown timer for pre-battle
     useEffect(() => {
-        if (!battle || battle.app_state !== 'PRE_BATTLE') return;
+        if (!battle || battle.app_state !== 'PRE_BATTLE' || !profile?.timezone) return;
 
         const updateCountdown = () => {
             const now = new Date();
-            const startDate = new Date(battle.start_date);
-            const diff = startDate.getTime() - now.getTime();
+
+            // Parse the start date (YYYY-MM-DD) as midnight in the user's timezone
+            const userTimezone = profile.timezone;
+            const startDateStr = battle.start_date; // e.g., "2025-11-28"
+
+            // Create a date string at midnight in the user's timezone
+            // We need to get "YYYY-MM-DD 00:00:00" interpreted in the user's timezone
+            const [year, month, day] = startDateStr.split('-').map(Number);
+
+            // Get current time in user's timezone to extract offset
+            const nowInUserTz = new Date(now.toLocaleString('en-US', { timeZone: userTimezone }));
+
+            // Get the target date at midnight in user's timezone
+            const targetDateInUserTz = new Date(new Date(year, month - 1, day, 0, 0, 0).toLocaleString('en-US', { timeZone: userTimezone }));
+
+            // Calculate the offset difference between user's timezone and local timezone
+            const localOffset = now.getTime() - new Date(now.toLocaleString('en-US')).getTime();
+            const userOffset = now.getTime() - nowInUserTz.getTime();
+            const offsetDiff = userOffset - localOffset;
+
+            // Create the start date at midnight in user's timezone
+            const startDate = new Date(year, month - 1, day, 0, 0, 0);
+            const startDateInUserTz = new Date(startDate.getTime() - offsetDiff);
+
+            const diff = startDateInUserTz.getTime() - now.getTime();
 
             if (diff <= 0) {
                 setTimeUntilBattle('Starting now!');
@@ -64,7 +89,7 @@ export default function Dashboard() {
         const interval = setInterval(updateCountdown, 1000);
 
         return () => clearInterval(interval);
-    }, [battle]);
+    }, [battle, profile]);
 
     const fetchTasks = async () => {
         if (!battle) return;
