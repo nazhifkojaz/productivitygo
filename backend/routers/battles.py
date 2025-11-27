@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 from database import supabase
 from dependencies import get_current_user
+from services.battle_service import BattleService
+from utils.rank_calculations import calculate_rank
 
 router = APIRouter(prefix="/battles", tags=["battles"])
 
@@ -25,10 +27,14 @@ async def get_current_battle(user = Depends(get_current_user)):
     # Find ONLY active battles (NOT pending or completed)
     # Pending battles -> Handled in Lobby (UserDashboard)
     # Completed battles -> Handled in Battle Result
-    res = supabase.table("battles").select("*")\
-        .or_(f"user1_id.eq.{user.id},user2_id.eq.{user.id}")\
-        .eq("status", "active")\
-        .execute()
+    
+    # OPTIMIZATION: Fetch battle AND related profiles in ONE query
+    # We need timezone for logic, and stats for Rival Radar
+    res = supabase.table("battles").select(
+        "*, user1:profiles!user1_id(username, level, timezone, battle_win_count, battle_count, total_xp_earned, completed_tasks), user2:profiles!user2_id(username, level, timezone, battle_win_count, battle_count, total_xp_earned, completed_tasks)"
+    ).or_(f"user1_id.eq.{user.id},user2_id.eq.{user.id}")\
+    .eq("status", "active")\
+    .execute()
         
     if not res.data:
         # Return 404 so frontend knows to show Lobby (IDLE state)
@@ -42,21 +48,31 @@ async def get_current_battle(user = Depends(get_current_user)):
     end_date = date.fromisoformat(battle['end_date'])
 
     # --- LAZY EVALUATION TRIGGER (Backup) ---
-    # Process any pending rounds using shared utility
-    # The scheduler handles this hourly, but this acts as a backup
     if battle['status'] == 'active':
         from utils.battle_processor import process_battle_rounds
         rounds_processed = process_battle_rounds(battle)
         if rounds_processed > 0:
             # Reload battle to get updated status/current_round
+            # We need to reload with the same join if we want to be consistent, 
+            # but usually just reloading the battle row is enough for status check.
+            # However, to keep 'battle' object consistent with embedded data, let's just update the fields we know changed.
             battle_reload = supabase.table("battles").select("*").eq("id", battle['id']).single().execute()
             if battle_reload.data:
-                battle = battle_reload.data
+                # Update only battle fields, keep embedded profiles
+                battle.update(battle_reload.data)
 
     # Determine App State based on USER LOCAL TIME
-    # Fetch user profile for timezone
-    profile_res = supabase.table("profiles").select("timezone").eq("id", user.id).single().execute()
-    user_tz = profile_res.data['timezone'] if profile_res.data else "UTC"
+    # We have the user's profile embedded in user1 or user2
+    if battle['user1_id'] == user.id:
+        user_profile = battle['user1']
+        rival_profile = battle['user2']
+        rival_id = battle['user2_id']
+    else:
+        user_profile = battle['user2']
+        rival_profile = battle['user1']
+        rival_id = battle['user1_id']
+        
+    user_tz = user_profile.get('timezone', 'UTC')
     
     try:
         user_today = datetime.now(pytz.timezone(user_tz)).date()
@@ -72,8 +88,6 @@ async def get_current_battle(user = Depends(get_current_user)):
     elif user_today > end_date:
         app_state = 'BATTLE_END'
     else:
-        # Use current_round and duration for precise state
-        # But for UI, we just care if we are in the date range
         if user_today == end_date:
              app_state = 'LAST_BATTLE_DAY'
         else:
@@ -86,14 +100,9 @@ async def get_current_battle(user = Depends(get_current_user)):
     # --- LAZY EVALUATION TRIGGER (FAIR MODE) ---
     # Only process rounds when the date has passed for BOTH players.
     
-    # 1. Get Timezones
-    # We already have user's timezone from context or profile fetch?
-    # We need to fetch both profiles to be sure.
-    user1_profile = supabase.table("profiles").select("timezone").eq("id", battle['user1_id']).single().execute()
-    user2_profile = supabase.table("profiles").select("timezone").eq("id", battle['user2_id']).single().execute()
-    
-    tz1 = user1_profile.data['timezone'] if user1_profile.data else "UTC"
-    tz2 = user2_profile.data['timezone'] if user2_profile.data else "UTC"
+    # 1. Get Timezones (Already fetched!)
+    tz1 = battle['user1'].get('timezone', 'UTC')
+    tz2 = battle['user2'].get('timezone', 'UTC')
     
     # 2. Helper to get local date
     def get_local_date(tz_str):
@@ -105,26 +114,13 @@ async def get_current_battle(user = Depends(get_current_user)):
     date1 = get_local_date(tz1)
     date2 = get_local_date(tz2)
     
-    # The "effective" date for the battle is the EARLIEST of the two local dates.
-    # i.e., We can only finalize a day if it has passed for the person "furthest behind" in time.
-    # Wait, no. If I am in Tokyo (Tue) and you are in NY (Mon).
-    # Day 1 (Mon) has passed for me. Has it passed for you? No.
-    # So we cannot finalize Day 1 yet.
-    # So we take the MINIMUM of the two dates to see "what date has definitely passed for everyone".
-    # Actually, we check if round_date < date1 AND round_date < date2.
-    
     if battle['status'] == 'active':
-        days_since_start = (user_today - start_date).days # This is just a rough upper bound
+        days_since_start = (user_today - start_date).days
         rounds_to_process = min(days_since_start, duration)
         
         if current_round < rounds_to_process:
-            # print(f"Lazy Eval Check: Round {current_round}. User1 Date: {date1}, User2 Date: {date2}")
-            
             for r in range(current_round, rounds_to_process):
                 round_date = start_date + timedelta(days=r)
-                
-                # CRITICAL CHECK: Has this date passed for BOTH users?
-                # A date D is "passed" if local_date > D.
                 if date1 > round_date and date2 > round_date:
                     print(f"Processing round {r} (Date {round_date}) - Passed for both.")
                     try:
@@ -139,34 +135,23 @@ async def get_current_battle(user = Depends(get_current_user)):
                         print(f"Error in lazy evaluation for round {r}: {e}")
                         break
                 else:
-                    # print(f"Round {r} ({round_date}) not yet passed for both. Waiting.")
                     break
             
             battle['current_round'] = current_round
 
-        # Check for Battle Completion
         if current_round >= duration:
             print("Lazy Eval: Battle finished, marking as completed")
             try:
-                # Call complete_battle logic
-                # We can call the RPC directly
-                result = supabase.rpc("complete_battle", {"battle_uuid": battle['id']}).execute()
-                if result.data:
+                result = BattleService.complete_battle(battle['id'])
+                if result:
                     battle['status'] = 'completed'
-                    # We might want to reload the battle to get the winner_id etc, 
-                    # but for now just updating status is enough to trigger the frontend to show "BATTLE_END"
             except Exception as e:
                  print(f"Error auto-completing battle: {e}")
 
     
-    # Determine Rival ID
-    rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
-    
-    # Fetch Rival Profile
-    rival_profile_res = supabase.table("profiles").select("*").eq("id", rival_id).execute()
-    rival_data = rival_profile_res.data[0] if rival_profile_res.data else None
-    
     # Fetch Rival's Tasks for Today (Only if IN_BATTLE or LAST_BATTLE_DAY)
+    # This still requires a separate fetch as it's a different table (daily_entries -> tasks)
+    # We could optimize this too, but let's stick to the main profile optimization first.
     if app_state in ['IN_BATTLE', 'LAST_BATTLE_DAY']:
         today_str = date.today().isoformat()
         
@@ -190,30 +175,32 @@ async def get_current_battle(user = Depends(get_current_user)):
         completed_tasks = sum(1 for t in rival_tasks if t['is_completed'])
         
         battle['rival'] = {
-            'username': rival_data['username'] if rival_data else 'Unknown Rival',
-            'level': rival_data['level'] if rival_data else 1,
+            'username': rival_profile.get('username', 'Unknown Rival'),
+            'level': rival_profile.get('level', 1),
             'tasks_total': total_tasks,
             'tasks_completed': completed_tasks,
             'stats': {
-                'battle_wins': rival_data.get('battle_win_count', 0),
-                'level': rival_data.get('level', 1),
-                'xp': rival_data.get('total_xp_earned', 0),
-                'win_rate': f"{round((rival_data.get('battle_win_count', 0) / rival_data.get('battle_count', 1)) * 100, 1) if rival_data.get('battle_count', 0) > 0 else  0}%",
-                'tasks_completed': rival_data.get('completed_tasks', 0)
+                'battle_wins': rival_profile.get('battle_win_count', 0),
+                'battle_fought': rival_profile.get('battle_count', 0),
+                'level': rival_profile.get('level', 1),
+                'total_xp': rival_profile.get('total_xp_earned', 0),
+                'win_rate': f"{round((rival_profile.get('battle_win_count', 0) / rival_profile.get('battle_count', 1)) * 100, 1) if rival_profile.get('battle_count', 0) > 0 else  0}%",
+                'tasks_completed': rival_profile.get('completed_tasks', 0)
             }
         }
     else:
          battle['rival'] = {
-            'username': rival_data['username'] if rival_data else 'Unknown Rival',
-            'level': rival_data['level'] if rival_data else 1,
+            'username': rival_profile.get('username', 'Unknown Rival'),
+            'level': rival_profile.get('level', 1),
             'tasks_total': 0,
             'tasks_completed': 0,
             'stats': {
-                'battle_wins': rival_data.get('battle_win_count', 0) if rival_data else 0,
-                'level': rival_data.get('level', 1) if rival_data else 1,
-                'xp': rival_data.get('total_xp_earned', 0) if rival_data else 0,
-                'win_rate': f"{round((rival_data.get('battle_win_count', 0) / rival_data.get('battle_count', 1)) * 100, 1) if rival_data and rival_data.get('battle_count', 0) > 0 else 0}%",
-                'tasks_completed': rival_data.get('completed_tasks', 0) if rival_data else 0
+                'battle_wins': rival_profile.get('battle_win_count', 0),
+                'battle_fought': rival_profile.get('battle_count', 0),
+                'level': rival_profile.get('level', 1),
+                'total_xp': rival_profile.get('total_xp_earned', 0),
+                'win_rate': f"{round((rival_profile.get('battle_win_count', 0) / rival_profile.get('battle_count', 1)) * 100, 1) if rival_profile.get('battle_count', 0) > 0 else 0}%",
+                'tasks_completed': rival_profile.get('completed_tasks', 0)
             }
         }
     
@@ -245,228 +232,39 @@ class InviteRequest(BaseModel):
 async def invite_user(invite: InviteRequest, user = Depends(get_current_user)):
     """
     Create a new battle invite.
-    
-    - Validates the rival exists and is not the same as the inviter
-    - Creates a pending battle with specified start date and duration
-    - Sets current_battle for both users upon acceptance
-    
-    Args:
-        invite: InviteRequest containing rival_id, start_date, and duration
-        user: Current authenticated user (inviter)
-    
-    Returns:
-        Battle details with status "pending"
     """
-    # 1. Validate Rival ID exists
-    rival_res = supabase.table("profiles").select("id, username").eq("id", invite.rival_id).single().execute()
-    if not rival_res.data:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    rival_id = invite.rival_id
-    
-    if rival_id == user.id:
-        raise HTTPException(status_code=400, detail="Cannot battle yourself")
-        
-    # 2. Check if either user is already in a battle (active or pending)
-    # Check for user
-    existing = supabase.table("battles").select("*")\
-        .or_(f"user1_id.eq.{user.id},user2_id.eq.{user.id}")\
-        .in_("status", ["active", "pending"])\
-        .execute()
-        
-    if existing.data:
-        raise HTTPException(status_code=400, detail="You are already in a battle or have a pending invite")
-
-    # Check for rival
-    rival_existing = supabase.table("battles").select("*")\
-        .or_(f"user1_id.eq.{rival_id},user2_id.eq.{rival_id}")\
-        .in_("status", ["active", "pending"])\
-        .execute()
-        
-    if rival_existing.data:
-        raise HTTPException(status_code=400, detail="Rival is already in a battle")
-    
-    # 3. Validate Date and Duration
-    try:
-        start_date = date.fromisoformat(invite.start_date)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid start date format")
-        
-    today = date.today()
-    if start_date <= today:
-        raise HTTPException(status_code=400, detail="Start date must be at least tomorrow")
-        
-    if invite.duration < 3 or invite.duration > 5:
-        raise HTTPException(status_code=400, detail="Duration must be between 3 and 5 days")
-        
-    # Calculate end date (start + duration - 1)
-    # e.g. Start Mon, Duration 3 -> Mon, Tue, Wed (End Wed)
-    end_date = start_date + timedelta(days=invite.duration - 1)
-    
-    # 4. Create Battle (Pending)
-    battle_data = {
-        "user1_id": user.id, # Inviter
-        "user2_id": rival_id, # Invitee
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "duration": invite.duration,
-        "current_round": 0,
-        "status": "pending"
-    }
-    
-    res = supabase.table("battles").insert(battle_data).execute()
-    
-    return {"status": "success", "battle": res.data[0]}
+    battle = BattleService.create_invite(user.id, invite.rival_id, invite.start_date, invite.duration)
+    return {"status": "success", "battle": battle}
 
 
 @router.post("/{battle_id}/accept", operation_id="accept_battle")
 async def accept_battle(battle_id: str, user = Depends(get_current_user)):
     """
     Accept a pending battle invite.
-    
-    - Verifies the user is the invitee (user2)
-    - Changes battle status from 'pending' to 'active'
-    - Sets current_battle for both participants
-    
-    Args:
-        battle_id: UUID of the battle to accept
-        user: Current authenticated user (must be invitee)
-    
-    Returns:
-        Updated battle data
     """
-    # Verify user is the invitee
+    BattleService.accept_invite(battle_id, user.id)
+    # Fetch updated battle to return
     battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    battle = battle_res.data
-    if battle['user2_id'] != user.id:
-        raise HTTPException(status_code=403, detail="Not your invite")
-        
-    if battle['status'] != 'pending':
-        raise HTTPException(status_code=400, detail="Invite not pending")
-        
-    # Update status to active
-    res = supabase.table("battles").update({"status": "active"}).eq("id", battle_id).execute()
-    
-    # Update current_battle for BOTH users
-    supabase.table("profiles").update({"current_battle": battle_id}).eq("id", battle['user1_id']).execute()
-    supabase.table("profiles").update({"current_battle": battle_id}).eq("id", battle['user2_id']).execute()
-    
-    return res.data
+    return battle_res.data
 
 @router.post("/{battle_id}/reject", operation_id="reject_battle")
 async def reject_battle(battle_id: str, user = Depends(get_current_user)):
     """
     Reject or cancel a battle invite.
-    
-    - Invitee can reject an invitation
-    - Inviter can cancel their own invitation
-    - Deletes the battle entirely
-    
-    Args:
-        battle_id: UUID of the battle to reject/cancel
-        user: Current authenticated user
-    
-    Returns:
-        Status confirmation
     """
-    # Verify user is the invitee OR inviter (can cancel own invite)
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    battle = battle_res.data
-    if battle['user2_id'] != user.id and battle['user1_id'] != user.id:
-        raise HTTPException(status_code=403, detail="Not your invite")
-        
-    # Delete the battle/invite
-    supabase.table("battles").delete().eq("id", battle_id).execute()
-    return {"status": "rejected"}
+    return BattleService.reject_invite(battle_id, user.id)
 
 @router.post("/{battle_id}/forfeit", operation_id="forfeit_battle")
 async def forfeit_battle(battle_id: str, user = Depends(get_current_user)):
     """
-    Forfeit an active battle, instantly ending it and awarding victory to the rival.
-    
-    - Only works on active battles (not pending or already completed)
-    - Sets the other participant as winner
-    - Increments winner's battle_wins stat
-    - Keeps current_battle set so users stay on battle result screen
-    
-    Args:
-        battle_id: UUID of the battle to forfeit
-        user: Current authenticated user (the one forfeiting)
-    
-    Returns:
-        Status and winner_id
+    Forfeit an active battle.
     """
-    # 1. Verify Battle
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    battle = battle_res.data[0]
-    if battle['status'] != 'active':
-        raise HTTPException(status_code=400, detail="Can only forfeit active battles")
-        
-    if battle['user1_id'] != user.id and battle['user2_id'] != user.id:
-        raise HTTPException(status_code=403, detail="Not a participant in this battle")
-        
-    # 2. Determine Winner (The OTHER person)
-    winner_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
-    
-    # 3. Process the updated data
-    today_iso = date.today().isoformat()
-    
-    update_data = {
-        "status": "completed",
-        "winner_id": winner_id,
-        "end_date": today_iso
-    }
-
-    # 3.1 winner data update
-    winner_profile = supabase.table("profiles").select("battle_win_count, battle_count").eq("id", winner_id).single().execute()
-    if winner_profile.data:
-        updated_win_count = winner_profile.data.get('battle_win_count') + 1
-        updated_battle_count = winner_profile.data.get('battle_count') + 1
-
-    # 3.2 loser/user data update
-    loser_profile = supabase.table("profiles").select("battle_count").eq("id", user.id).single().execute()
-    if loser_profile.data:
-        updated_battle_count = loser_profile.data.get('battle_count') + 1
-    
-    # Update data
-    try:
-        supabase.table("battles").update(update_data).eq("id", battle_id).execute()
-        print(f"Battle {battle_id} marked as completed, winner: {winner_id}")
-
-        supabase.table("profiles").update({"battle_win_count": updated_win_count, "battle_count": updated_battle_count}).eq("id", winner_id).execute()
-        print(f"Updated winner {winner_id} profile: {updated_win_count} wins, {updated_battle_count} battles")
-
-        supabase.table("profiles").update({"battle_count": updated_battle_count}).eq("id", user.id).execute()
-        print(f"Updated loser {user.id} profile: {updated_battle_count} battles")
-    except Exception as e:
-        print(f"Failed to update battle status: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update battle status: {str(e)}")
-    
-    return {"status": "forfeited", "winner_id": winner_id}
+    return BattleService.forfeit_battle(battle_id, user.id)
 
 @router.post("/{battle_id}/leave", operation_id="leave_battle")
 async def leave_battle(battle_id: str, user = Depends(get_current_user)):
     """
-    Leave a battle result screen (End Campaign / Decline Rematch).
-    
-    - Clears the current_battle field for the user
-    - Allows user to return to lobby after viewing results
-    
-    Args:
-        battle_id: UUID of the battle to leave
-        user: Current authenticated user
-    
-    Returns:
-        Status confirmation
+    Leave a battle result screen.
     """
     try:
         supabase.table("profiles").update({"current_battle": None}).eq("id", user.id).execute()
@@ -485,101 +283,41 @@ def get_daily_quota(date_obj: date) -> int:
 
 @router.post("/{battle_id}/complete", operation_id="complete_battle")
 async def complete_battle(battle_id: str, user = Depends(get_current_user)):
-    # 1. Verify Battle
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    battle = battle_res.data[0]
-    if battle['status'] != 'active':
-        raise HTTPException(status_code=400, detail="Battle is not active")
-        
-    # 2. Call database function to complete battle
-    try:
-        result = supabase.rpc("complete_battle", {"battle_uuid": battle_id}).execute()
-        if result.data:
-            data = result.data[0] if isinstance(result.data, list) else result.data
-            return {
-                "status": "completed",
-                "winner_id": data.get('winner_id'),
-                "scores": {
-                    "user1_total_xp": data.get('user1_total_xp'),
-                    "user2_total_xp": data.get('user2_total_xp')
-                }
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to complete battle")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error completing battle: {str(e)}")
+    return BattleService.complete_battle(battle_id)
 
 @router.post("/{battle_id}/daily-round", operation_id="calculate_daily_round")
 async def calculate_round(battle_id: str, round_date: str = None, user = Depends(get_current_user)):
     """
     [DEBUG ONLY] Manually calculate daily round for a specific date.
-    This endpoint is only available when DEBUG_MODE=true in .env
-    
-    Used for testing and development to simulate day progression.
-    In production, rounds are processed automatically via the scheduler.
     """
     from config import DEBUG_MODE
     if not DEBUG_MODE:
         raise HTTPException(status_code=404, detail="Endpoint not available in production mode")
     
-    # 1. Verify Battle
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    battle = battle_res.data[0]
-    if battle['status'] != 'active':
-        raise HTTPException(status_code=400, detail="Battle is not active")
-    
-    # 2. Determine round date (default to today)
-    if round_date:
-        try:
-            target_date = date.fromisoformat(round_date)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format (YYYY-MM-DD)")
-    else:
-        target_date = date.today()
-    
-    # 3. Call database function to calculate daily round
-    try:
-        result = supabase.rpc("calculate_daily_round", {
-            "battle_uuid": battle_id,
-            "round_date": target_date.isoformat()
-        }).execute()
-        
-        if result.data:
-            data = result.data[0] if isinstance(result.data, list) else result.data
-            # Increment current_round
-            current_round = battle.get('current_round', 0)
-            supabase.table("battles").update({"current_round": current_round + 1}).eq("id", battle_id).execute()
-            
-            return {
-                "status": "round_calculated",
-                "date": target_date.isoformat(),
-                "user1_xp": data.get('user1_xp'),
-                "user2_xp": data.get('user2_xp'),
-                "winner_id": data.get('winner_id')
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to calculate round")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error calculating round: {str(e)}")
+    return BattleService.calculate_round(battle_id, round_date)
 
 
 @router.get("/{battle_id}", operation_id="get_battle_details")
 async def get_battle_details(battle_id: str, user = Depends(get_current_user)):
     # Fetch battle details including profiles
-    res = supabase.table("battles").select("*, user1:profiles!user1_id(username, level), user2:profiles!user2_id(username, level)")\
-        .eq("id", battle_id)\
-        .execute()
+    # We need stats to calculate rank
+    res = supabase.table("battles").select(
+        "*, user1:profiles!user1_id(username, level, battle_count, battle_win_count), user2:profiles!user2_id(username, level, battle_count, battle_win_count)"
+    ).eq("id", battle_id).execute()
         
     if not res.data:
         raise HTTPException(status_code=404, detail="Battle not found")
         
     battle = res.data[0]
+    
+    # Calculate Ranks
+    if battle.get('user1'):
+        u1 = battle['user1']
+        u1['rank'] = calculate_rank(u1.get('level', 1), u1.get('battle_count', 0), u1.get('battle_win_count', 0))
+        
+    if battle.get('user2'):
+        u2 = battle['user2']
+        u2['rank'] = calculate_rank(u2.get('level', 1), u2.get('battle_count', 0), u2.get('battle_win_count', 0))
     
     # Fetch Daily Breakdown
     entries_res = supabase.table("daily_entries").select("date, user_id, daily_xp")\
@@ -634,60 +372,11 @@ async def get_battle_details(battle_id: str, user = Depends(get_current_user)):
 
 @router.post("/{battle_id}/archive", operation_id="archive_battle")
 async def archive_battle(battle_id: str, user = Depends(get_current_user)):
-    # Verify user is in battle
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    # Update status
-    # NOTE: 'archived' status is not supported by DB constraint yet.
-    # Workaround: DELETE the battle to remove it from view.
-    supabase.table("battles").delete().eq("id", battle_id).execute()
-    return {"status": "archived"}
+    return BattleService.archive_battle(battle_id)
 
 @router.post("/{battle_id}/rematch", operation_id="rematch_battle")
 async def rematch_battle(battle_id: str, user = Depends(get_current_user)):
-    # 1. Get old battle to find opponent
-    old_battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-    if not old_battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-    old_battle = old_battle_res.data[0]
-    
-    opponent_id = old_battle['user2_id'] if old_battle['user1_id'] == user.id else old_battle['user1_id']
-    
-    # 2. Check if pending rematch already exists
-    all_pending = supabase.table("battles").select("*").eq("status", "pending").execute()
-    user1_id = old_battle['user1_id']
-    user2_id = old_battle['user2_id']
-    
-    existing_pending = [p for p in all_pending.data 
-                        if (p['user1_id'] == user1_id and p['user2_id'] == user2_id) 
-                        or (p['user1_id'] == user2_id and p['user2_id'] == user1_id)]
-    
-    if existing_pending:
-        # Rematch already requested, just return it
-        return {"status": "rematch_already_exists", "battle": existing_pending[0]}
-    
-    # 3. Create new battle (Pending)
-    today = date.today()
-    start_date = today + timedelta(days=1) # Starts tomorrow
-    
-    # Inherit duration (default to 5 if not set)
-    duration = old_battle.get('duration', 5)
-    end_date = start_date + timedelta(days=duration - 1)
-    
-    new_battle_data = {
-        "user1_id": user.id,
-        "user2_id": opponent_id,
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "duration": duration,
-        "current_round": 0,
-        "status": "pending"
-    }
-    
-    res = supabase.table("battles").insert(new_battle_data).execute()
-    return {"status": "rematch_created", "battle": res.data[0]}
+    return BattleService.create_rematch(battle_id, user.id)
 
 @router.get("/{battle_id}/pending-rematch", operation_id="get_pending_rematch")
 async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
@@ -723,17 +412,4 @@ async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
 
 @router.post("/{battle_id}/decline", operation_id="decline_rematch")
 async def decline_rematch(battle_id: str, user = Depends(get_current_user)):
-    # Find the pending battle
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-    if not battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-        
-    battle = battle_res.data[0]
-    
-    # Verify it's pending
-    if battle['status'] != 'pending':
-        raise HTTPException(status_code=400, detail="Battle is not pending")
-    
-    # Delete the pending battle
-    supabase.table("battles").delete().eq("id", battle_id).execute()
-    return {"status": "declined"}
+    return BattleService.decline_rematch(battle_id)
