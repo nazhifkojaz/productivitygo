@@ -2,6 +2,9 @@ from datetime import date, timedelta, datetime
 import pytz
 from fastapi import HTTPException
 from database import supabase
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class BattleService:
     @staticmethod
@@ -177,7 +180,7 @@ class BattleService:
 
                 # Log idempotent calls for monitoring
                 if already_completed:
-                    print(f"[INFO] Battle {battle_id} was already completed, returning existing result (idempotent call)")
+                    logger.info(f"Battle {battle_id} was already completed, returning existing result (idempotent call)")
 
                 return {
                     "status": "completed",

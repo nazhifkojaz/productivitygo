@@ -10,8 +10,10 @@ from utils.rank_calculations import (
     calculate_level_from_xp
 )
 from utils.stats import format_win_rate
+from utils.logging_config import get_logger
 
 router = APIRouter(prefix="/users", tags=["users"])
+logger = get_logger(__name__)
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -259,5 +261,5 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Public profile error: {e}")
+        logger.error(f"Public profile error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

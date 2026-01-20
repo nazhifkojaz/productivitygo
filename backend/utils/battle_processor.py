@@ -2,10 +2,15 @@
 Utility functions for processing battle rounds and state updates.
 
 Shared logic used by both the scheduler and lazy evaluation.
+
+REFACTOR-007: Replaced print statements with centralized logging.
 """
 from datetime import date, timedelta, datetime
 import pytz
 from database import supabase
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_local_date(tz_str: str) -> date:
@@ -75,7 +80,7 @@ def process_battle_rounds(battle: dict) -> int:
         
         # CRITICAL: Only process if BOTH players have finished this day
         if date1 > round_date and date2 > round_date:
-            print(f"[BATTLE_PROCESSOR] Processing round {r} for battle {battle_id} (Date: {round_date})")
+            logger.debug(f"Processing round {r} for battle {battle_id} (Date: {round_date})")
             try:
                 # Call the database function to calculate round
                 rpc_result = supabase.rpc("calculate_daily_round", {
@@ -85,7 +90,7 @@ def process_battle_rounds(battle: dict) -> int:
 
                 # BUG-004 FIX: Validate RPC response before proceeding
                 if rpc_result.data is None:
-                    print(f"[BATTLE_PROCESSOR] RPC returned None for round {r} of battle {battle_id}")
+                    logger.warning(f"RPC returned None for round {r} of battle {battle_id}")
                     break
 
                 # Extract data - handle both list and dict responses
@@ -93,7 +98,7 @@ def process_battle_rounds(battle: dict) -> int:
 
                 # Validate we got expected data structure
                 if data is None:
-                    print(f"[BATTLE_PROCESSOR] RPC data is None for round {r} of battle {battle_id}")
+                    logger.warning(f"RPC data is None for round {r} of battle {battle_id}")
                     break
 
                 # Update round count only after validating RPC succeeded
@@ -104,10 +109,10 @@ def process_battle_rounds(battle: dict) -> int:
                 # Log successful round processing with XP values
                 user1_xp = data.get('user1_xp', 0)
                 user2_xp = data.get('user2_xp', 0)
-                print(f"[BATTLE_PROCESSOR] Round {r} processed successfully: user1_xp={user1_xp}, user2_xp={user2_xp}")
+                logger.debug(f"Round {r} processed successfully: user1_xp={user1_xp}, user2_xp={user2_xp}")
 
             except Exception as e:
-                print(f"[BATTLE_PROCESSOR] Error processing round {r} for battle {battle_id}: {e}")
+                logger.error(f"Error processing round {r} for battle {battle_id}: {e}")
                 break
         else:
             # Can't process this round yet, stop
@@ -115,22 +120,22 @@ def process_battle_rounds(battle: dict) -> int:
     
     # Check if battle is complete
     if current_round >= duration and battle['status'] == 'active':
-        print(f"[BATTLE_PROCESSOR] Battle {battle_id} is complete, finalizing...")
+        logger.info(f"Battle {battle_id} is complete, finalizing...")
         try:
             result = supabase.rpc("complete_battle", {"battle_uuid": battle_id}).execute()
 
             # BUG-004 FIX: Validate RPC response
             if result.data is None:
-                print(f"[BATTLE_PROCESSOR] complete_battle RPC returned None for battle {battle_id}")
+                logger.warning(f"complete_battle RPC returned None for battle {battle_id}")
             else:
                 # Extract data - handle both list and dict responses
                 data = result.data[0] if isinstance(result.data, list) else result.data
                 if data is None:
-                    print(f"[BATTLE_PROCESSOR] complete_battle data is None for battle {battle_id}")
+                    logger.warning(f"complete_battle data is None for battle {battle_id}")
                 else:
                     winner_id = data.get('winner_id') if data else None
-                    print(f"[BATTLE_PROCESSOR] Battle {battle_id} completed successfully, winner: {winner_id}")
+                    logger.info(f"Battle {battle_id} completed successfully, winner: {winner_id}")
         except Exception as e:
-            print(f"[BATTLE_PROCESSOR] Error completing battle {battle_id}: {e}")
-    
+            logger.error(f"Error completing battle {battle_id}: {e}")
+
     return rounds_processed

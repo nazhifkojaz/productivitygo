@@ -3,11 +3,16 @@ Background Scheduler for Periodic Tasks
 
 Uses APScheduler to run hourly checks on active battles,
 processing rounds when both players have completed their day.
+
+REFACTOR-007: Replaced print statements with centralized logging.
 """
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 from database import supabase
 from utils.battle_processor import process_battle_rounds
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def process_active_battles():
@@ -15,17 +20,17 @@ def process_active_battles():
     Hourly job: Check all active battles and process rounds
     when both players have finished their day.
     """
-    print(f"[SCHEDULER] Running hourly battle check at {datetime.now()}")
-    
+    logger.info("Running hourly battle check")
+
     # 1. Fetch all active battles
     try:
         battles_res = supabase.table("battles").select("*").eq("status", "active").execute()
         battles = battles_res.data if battles_res.data else []
-        print(f"[SCHEDULER] Found {len(battles)} active battles")
+        logger.info(f"Found {len(battles)} active battles")
     except Exception as e:
-        print(f"[SCHEDULER] Error fetching battles: {e}")
+        logger.error(f"Error fetching battles: {e}")
         return
-    
+
     # 2. Process each battle using shared utility
     total_rounds = 0
     for battle in battles:
@@ -33,10 +38,10 @@ def process_active_battles():
             rounds = process_battle_rounds(battle)
             total_rounds += rounds
         except Exception as e:
-            print(f"[SCHEDULER] Error processing battle {battle['id']}: {e}")
+            logger.error(f"Error processing battle {battle['id']}: {e}")
             continue
-    
-    print(f"[SCHEDULER] Hourly check complete. Processed {total_rounds} round(s)")
+
+    logger.info(f"Hourly check complete. Processed {total_rounds} round(s)")
 
 
 # Initialize scheduler
@@ -53,9 +58,9 @@ def start_scheduler():
         replace_existing=True
     )
     scheduler.start()
-    print("[SCHEDULER] Background scheduler started (hourly)")
+    logger.info("Background scheduler started (hourly)")
 
 def shutdown_scheduler():
     """Gracefully shut down the scheduler"""
     scheduler.shutdown()
-    print("[SCHEDULER] Background scheduler stopped")
+    logger.info("Background scheduler stopped")
