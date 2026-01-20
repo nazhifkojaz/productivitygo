@@ -71,7 +71,25 @@ async def get_current_battle(user = Depends(get_current_user)):
         user_profile = battle['user2']
         rival_profile = battle['user1']
         rival_id = battle['user1_id']
-        
+
+    # Handle None profiles (deleted users, database inconsistencies)
+    if user_profile is None:
+        print(f"[WARNING] User profile missing for battle {battle['id']}, user {user.id}")
+        user_profile = {'timezone': 'UTC', 'username': 'Unknown', 'level': 1}
+
+    if rival_profile is None:
+        print(f"[WARNING] Rival profile missing for battle {battle['id']}, rival {rival_id}")
+        # Default rival profile with safe defaults
+        rival_profile = {
+            'timezone': 'UTC',
+            'username': 'Unknown Rival',
+            'level': 1,
+            'battle_win_count': 0,
+            'battle_count': 0,
+            'total_xp_earned': 0,
+            'completed_tasks': 0
+        }
+
     user_tz = user_profile.get('timezone', 'UTC')
 
     try:
@@ -102,8 +120,11 @@ async def get_current_battle(user = Depends(get_current_user)):
     # Only process rounds when the date has passed for BOTH players.
     
     # 1. Get Timezones (Already fetched!)
-    tz1 = battle['user1'].get('timezone', 'UTC')
-    tz2 = battle['user2'].get('timezone', 'UTC')
+    # Use 'or' to provide default dict if profile is None
+    user1_data = battle['user1'] or {'timezone': 'UTC'}
+    user2_data = battle['user2'] or {'timezone': 'UTC'}
+    tz1 = user1_data.get('timezone', 'UTC')
+    tz2 = user2_data.get('timezone', 'UTC')
     
     # 2. Helper to get local date
     def get_local_date(tz_str):
