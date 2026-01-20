@@ -7,6 +7,7 @@ from uuid import UUID
 from database import supabase
 from dependencies import get_current_user
 from models import TaskCreate, Task
+from utils.quota import get_daily_quota
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -17,18 +18,6 @@ def get_user_date(timezone_str: str) -> date:
         return datetime.now(tz).date()
     except pytz.exceptions.UnknownTimeZoneError:
         return datetime.now(pytz.utc).date()
-
-import hashlib
-
-def get_daily_quota(date_obj: date) -> int:
-    """Deterministically returns 3, 4, or 5 based on the date."""
-    date_str = date_obj.isoformat()
-    # Create a hash of the date string
-    hash_obj = hashlib.md5(date_str.encode())
-    # Convert first byte to int
-    hash_int = int(hash_obj.hexdigest(), 16)
-    # Modulo 3 to get 0, 1, 2 -> Add 3 to get 3, 4, 5
-    return (hash_int % 3) + 3
 
 @router.get("/quota", operation_id="get_daily_quota")
 async def get_quota(date_str: str = None, user = Depends(get_current_user)):

@@ -8,6 +8,8 @@ from database import supabase
 from dependencies import get_current_user
 from services.battle_service import BattleService
 from utils.rank_calculations import calculate_rank
+from utils.quota import get_daily_quota
+from utils.stats import format_win_rate
 
 router = APIRouter(prefix="/battles", tags=["battles"])
 
@@ -207,33 +209,41 @@ async def get_current_battle(user = Depends(get_current_user)):
             
         total_tasks = len(rival_tasks)
         completed_tasks = sum(1 for t in rival_tasks if t['is_completed'])
-        
+
+        # REFACTOR-002: Use shared win rate calculation
+        battle_win_count = rival_profile.get('battle_win_count', 0)
+        battle_count = rival_profile.get('battle_count', 0)
+
         battle['rival'] = {
             'username': rival_profile.get('username', 'Unknown Rival'),
             'level': rival_profile.get('level', 1),
             'tasks_total': total_tasks,
             'tasks_completed': completed_tasks,
             'stats': {
-                'battle_wins': rival_profile.get('battle_win_count', 0),
-                'battle_fought': rival_profile.get('battle_count', 0),
+                'battle_wins': battle_win_count,
+                'battle_fought': battle_count,
                 'level': rival_profile.get('level', 1),
                 'total_xp': rival_profile.get('total_xp_earned', 0),
-                'win_rate': f"{round((rival_profile.get('battle_win_count', 0) / rival_profile.get('battle_count', 1)) * 100, 1) if rival_profile.get('battle_count', 0) > 0 else  0}%",
+                'win_rate': format_win_rate(battle_win_count, battle_count),
                 'tasks_completed': rival_profile.get('completed_tasks', 0)
             }
         }
     else:
-         battle['rival'] = {
+        # REFACTOR-002: Use shared win rate calculation
+        battle_win_count = rival_profile.get('battle_win_count', 0)
+        battle_count = rival_profile.get('battle_count', 0)
+
+        battle['rival'] = {
             'username': rival_profile.get('username', 'Unknown Rival'),
             'level': rival_profile.get('level', 1),
             'tasks_total': 0,
             'tasks_completed': 0,
             'stats': {
-                'battle_wins': rival_profile.get('battle_win_count', 0),
-                'battle_fought': rival_profile.get('battle_count', 0),
+                'battle_wins': battle_win_count,
+                'battle_fought': battle_count,
                 'level': rival_profile.get('level', 1),
                 'total_xp': rival_profile.get('total_xp_earned', 0),
-                'win_rate': f"{round((rival_profile.get('battle_win_count', 0) / rival_profile.get('battle_count', 1)) * 100, 1) if rival_profile.get('battle_count', 0) > 0 else 0}%",
+                'win_rate': format_win_rate(battle_win_count, battle_count),
                 'tasks_completed': rival_profile.get('completed_tasks', 0)
             }
         }
@@ -305,15 +315,6 @@ async def leave_battle(battle_id: str, user = Depends(get_current_user)):
         return {"status": "left"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to leave battle: {str(e)}")
-
-import hashlib
-
-def get_daily_quota(date_obj: date) -> int:
-    """Deterministically returns 3, 4, or 5 based on the date."""
-    date_str = date_obj.isoformat()
-    hash_obj = hashlib.md5(date_str.encode())
-    hash_int = int(hash_obj.hexdigest(), 16)
-    return (hash_int % 3) + 3
 
 @router.post("/{battle_id}/complete", operation_id="complete_battle")
 async def complete_battle(battle_id: str, user = Depends(get_current_user)):
