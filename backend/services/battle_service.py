@@ -162,26 +162,38 @@ class BattleService:
         battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
         if not battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
-            
+
         battle = battle_res.data[0]
-        if battle['status'] != 'active':
+
+        # Allow both 'active' and 'completed' statuses for idempotency
+        # If already completed, the SQL function will handle it idempotently
+        if battle['status'] not in ('active', 'completed'):
             raise HTTPException(status_code=400, detail="Battle is not active")
-            
-        # 2. Call database function to complete battle
+
+        # 2. Call database function to complete battle (now idempotent)
         try:
             result = supabase.rpc("complete_battle", {"battle_uuid": battle_id}).execute()
             if result.data:
                 data = result.data[0] if isinstance(result.data, list) else result.data
+                already_completed = data.get('already_completed', False)
+
+                # Log idempotent calls for monitoring
+                if already_completed:
+                    print(f"[INFO] Battle {battle_id} was already completed, returning existing result (idempotent call)")
+
                 return {
                     "status": "completed",
                     "winner_id": data.get('winner_id'),
                     "scores": {
                         "user1_total_xp": data.get('user1_total_xp'),
                         "user2_total_xp": data.get('user2_total_xp')
-                    }
+                    },
+                    "already_completed": already_completed  # Indicates if this was an idempotent call
                 }
             else:
                 raise HTTPException(status_code=500, detail="Failed to complete battle")
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error completing battle: {str(e)}")
 

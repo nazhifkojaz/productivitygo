@@ -145,6 +145,9 @@ async def get_current_battle(user = Depends(get_current_user)):
                 result = BattleService.complete_battle(battle['id'])
                 if result:
                     battle['status'] = 'completed'
+                    # Log if this was an idempotent call (already completed by another process)
+                    if result.get('already_completed'):
+                        print(f"Lazy Eval: Battle {battle['id']} was already completed by another process (safe idempotent call)")
             except Exception as e:
                  print(f"Error auto-completing battle: {e}")
 

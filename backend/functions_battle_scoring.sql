@@ -64,20 +64,21 @@ BEGIN
         completed_tasks = completed_tasks + (SELECT COUNT(*) FROM tasks t JOIN daily_entries de ON de.id = t.daily_entry_id WHERE de.user_id = v_user2_id AND de.date = round_date AND t.is_completed = true)
     WHERE id = v_user2_id;
     
-    -- Update daily_win_count
-    IF v_winner_id IS NOT NULL THEN
-        UPDATE profiles SET daily_win_count = daily_win_count + 1 WHERE id = v_winner_id;
-    END IF;
+    -- Update daily_win_count (REMOVED: Column deprecated)
+    -- IF v_winner_id IS NOT NULL THEN
+    --    UPDATE profiles SET daily_win_count = daily_win_count + 1 WHERE id = v_winner_id;
+    -- END IF;
     
     RETURN QUERY SELECT v_user1_xp, v_user2_xp, v_winner_id;
 END;
 $$;
 
 -- Function to complete battle and determine overall winner
+-- BUG-001 FIX: Made idempotent to prevent duplicate stat increments from concurrent calls
 CREATE OR REPLACE FUNCTION complete_battle(
     battle_uuid UUID
 )
-RETURNS TABLE(winner_id UUID, user1_total_xp INT, user2_total_xp INT)
+RETURNS TABLE(winner_id UUID, user1_total_xp INT, user2_total_xp INT, already_completed BOOLEAN)
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -88,21 +89,39 @@ DECLARE
     v_winner_id UUID;
     v_start_date DATE;
     v_end_date DATE;
+    v_current_status TEXT;
 BEGIN
-    -- Get battle details
-    SELECT user1_id, user2_id, start_date, end_date 
-    INTO v_user1_id, v_user2_id, v_start_date, v_end_date
+    -- Get current battle details and status first (IDEMPOTENCY CHECK)
+    SELECT status, winner_id, user1_id, user2_id, start_date, end_date
+    INTO v_current_status, v_winner_id, v_user1_id, v_user2_id, v_start_date, v_end_date
     FROM battles WHERE id = battle_uuid;
-    
+
+    -- If battle is already completed, return existing result WITHOUT reprocessing
+    IF v_current_status = 'completed' THEN
+        -- Get the XP values that were already calculated
+        SELECT COALESCE(SUM(daily_xp), 0)::INT INTO v_user1_total_xp
+        FROM daily_entries
+        WHERE user_id = v_user1_id AND date BETWEEN v_start_date AND v_end_date;
+
+        SELECT COALESCE(SUM(daily_xp), 0)::INT INTO v_user2_total_xp
+        FROM daily_entries
+        WHERE user_id = v_user2_id AND date BETWEEN v_start_date AND v_end_date;
+
+        -- Return already_completed = TRUE to signal this was an idempotent call
+        RETURN QUERY SELECT v_winner_id, v_user1_total_xp, v_user2_total_xp, TRUE;
+        RETURN;
+    END IF;
+
+    -- NEW COMPLETION: Process the battle completion
     -- Sum total XP across all days
     SELECT COALESCE(SUM(daily_xp), 0)::INT INTO v_user1_total_xp
     FROM daily_entries
     WHERE user_id = v_user1_id AND date BETWEEN v_start_date AND v_end_date;
-    
+
     SELECT COALESCE(SUM(daily_xp), 0)::INT INTO v_user2_total_xp
     FROM daily_entries
     WHERE user_id = v_user2_id AND date BETWEEN v_start_date AND v_end_date;
-    
+
     -- Determine overall winner
     IF v_user1_total_xp > v_user2_total_xp THEN
         v_winner_id := v_user1_id;
@@ -111,33 +130,31 @@ BEGIN
     ELSE
         v_winner_id := NULL; -- Draw
     END IF;
-    
-    -- Update overall_win_count
+
+    -- Update battle_win_count (formerly overall_win_count)
     IF v_winner_id IS NOT NULL THEN
-        UPDATE profiles SET overall_win_count = overall_win_count + 1 WHERE id = v_winner_id;
+        UPDATE profiles SET battle_win_count = battle_win_count + 1 WHERE id = v_winner_id;
     END IF;
-    
+
     -- Update total_xp_earned for both
     UPDATE profiles SET total_xp_earned = total_xp_earned + v_user1_total_xp WHERE id = v_user1_id;
     UPDATE profiles SET total_xp_earned = total_xp_earned + v_user2_total_xp WHERE id = v_user2_id;
-    
+
     -- Increment battle_count for both
     UPDATE profiles SET battle_count = battle_count + 1 WHERE id IN (v_user1_id, v_user2_id);
-    
-    -- Calculate and update win rates
-    UPDATE profiles 
-    SET 
-        overall_win_rate = CASE WHEN battle_count > 0 THEN (overall_win_count::DECIMAL / battle_count * 100) ELSE 0 END,
-        daily_win_rate = CASE WHEN battle_count > 0 THEN (daily_win_count::DECIMAL / (battle_count * 5) * 100) ELSE 0 END
-    WHERE id IN (v_user1_id, v_user2_id);
-    
+
     -- Update level (every 1000 XP = 1 level)
     UPDATE profiles SET level = FLOOR(total_xp_earned / 1000) + 1 WHERE id = v_user1_id;
     UPDATE profiles SET level = FLOOR(total_xp_earned / 1000) + 1 WHERE id = v_user2_id;
-    
-    -- Mark battle complete
-    UPDATE battles SET status = 'completed', winner_id = v_winner_id WHERE id = battle_uuid;
-    
-    RETURN QUERY SELECT v_winner_id, v_user1_total_xp, v_user2_total_xp;
+
+    -- Mark battle complete WITH timestamp for idempotency
+    UPDATE battles
+    SET status = 'completed',
+        winner_id = v_winner_id,
+        completed_at = NOW()
+    WHERE id = battle_uuid;
+
+    -- Return already_completed = FALSE to signal this was a fresh completion
+    RETURN QUERY SELECT v_winner_id, v_user1_total_xp, v_user2_total_xp, FALSE;
 END;
 $$;
