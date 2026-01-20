@@ -147,13 +147,21 @@ async def get_current_battle(user = Depends(get_current_user)):
                 if date1 > round_date and date2 > round_date:
                     print(f"Processing round {r} (Date {round_date}) - Passed for both.")
                     try:
-                        supabase.rpc("calculate_daily_round", {
+                        # BUG-004 FIX: Validate RPC response before incrementing round counter
+                        rpc_result = supabase.rpc("calculate_daily_round", {
                             "battle_uuid": battle['id'],
                             "round_date": round_date.isoformat()
                         }).execute()
-                        
+
+                        # Validate RPC succeeded before proceeding
+                        if rpc_result.data is None:
+                            print(f"Lazy Eval: RPC returned None for round {r}, stopping processing")
+                            break
+
+                        # Update round count only after validation
                         current_round += 1
                         supabase.table("battles").update({"current_round": current_round}).eq("id", battle['id']).execute()
+
                     except Exception as e:
                         print(f"Error in lazy evaluation for round {r}: {e}")
                         break
