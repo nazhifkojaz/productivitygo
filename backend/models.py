@@ -3,6 +3,9 @@ from typing import Optional, List
 from datetime import date, datetime
 from uuid import UUID
 
+# Import GameMode enum for type hints
+from utils.enums import GameMode
+
 # --- PROFILES ---
 class ProfileBase(BaseModel):
     username: Optional[str] = None
@@ -44,7 +47,10 @@ class DailyEntryBase(BaseModel):
 
 class DailyEntry(DailyEntryBase):
     id: UUID
+    # REFACTOR-003: battle_id will become Optional when adventure mode is added
+    # For now, it's required and links to the active battle
     battle_id: UUID
+    # adventure_id: Optional[UUID] = None  # TODO: Add for adventure mode
     user_id: UUID
     score_distribution: Optional[List[int]] = None
     day_winner: Optional[bool] = None

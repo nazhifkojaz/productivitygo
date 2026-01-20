@@ -8,6 +8,7 @@ from database import supabase
 from dependencies import get_current_user
 from models import TaskCreate, Task
 from utils.quota import get_daily_quota
+from utils.game_session import get_active_game_session, get_daily_entry_key
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -64,41 +65,47 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
         
     if len(optional_tasks) > 2:
         raise HTTPException(status_code=400, detail="You can only submit up to 2 optional tasks.")
-    
+
     # 3. Check/Create Daily Entry for Tomorrow
-    # We need a battle_id. For MVP, let's assume the user is in an active battle.
-    # Find active battle for user
-    battle_res = supabase.table("battles").select("id")\
-        .or_(f"user1_id.eq.{user.id},user2_id.eq.{user.id}")\
-        .eq("status", "active")\
-        .single().execute()
-        
-    if not battle_res.data:
-        # For testing/MVP, if no battle exists, maybe we can't plan? 
-        # Or we create a dummy entry? Let's enforce Battle for now.
-        raise HTTPException(status_code=400, detail="No active battle found. You must be in a battle to plan tasks.")
-    
-    battle_id = battle_res.data['id']
-    
+    # REFACTOR-003: Use game session helper to abstract battle mode
+    # This supports both PVP battles and future adventure mode
+    session_id, game_mode = get_active_game_session(user.id)
+
+    # Get the appropriate daily entry key based on game mode
+    entry_key = get_daily_entry_key(session_id, game_mode)
+
     # Check if entry exists
     entry_res = supabase.table("daily_entries").select("id")\
-        .eq("battle_id", battle_id)\
         .eq("user_id", user.id)\
         .eq("date", user_tomorrow.isoformat())\
         .execute()
-        
+
+    # Filter to find entry matching this session
+    existing_entry = None
     if entry_res.data:
-        entry_id = entry_res.data[0]['id']
+        for entry in entry_res.data:
+            # Check if this entry belongs to our session
+            if game_mode.value == "pvp" and entry.get("battle_id") == session_id:
+                existing_entry = entry
+                break
+            # TODO: Add adventure check when mode is implemented
+            # elif game_mode.value == "adventure" and entry.get("adventure_id") == session_id:
+
+    if existing_entry:
+        entry_id = existing_entry['id']
         # Clear existing draft tasks
         supabase.table("tasks").delete().eq("daily_entry_id", entry_id).execute()
     else:
-        # Create new entry
-        new_entry = supabase.table("daily_entries").insert({
-            "battle_id": battle_id,
+        # Create new entry with the appropriate key
+        new_entry_data = {
             "user_id": user.id,
             "date": user_tomorrow.isoformat(),
             "is_locked": False
-        }).execute()
+        }
+        # Add battle_id or adventure_id based on game mode
+        new_entry_data.update(entry_key)
+
+        new_entry = supabase.table("daily_entries").insert(new_entry_data).execute()
         entry_id = new_entry.data[0]['id']
         
     # Calculate Scores
