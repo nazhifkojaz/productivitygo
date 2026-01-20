@@ -11,16 +11,19 @@ from database import supabase
 def get_local_date(tz_str: str) -> date:
     """
     Get the current local date for a given timezone.
-    
+
+    Falls back to UTC if timezone is invalid.
+
     Args:
         tz_str: Timezone string (e.g., 'America/New_York')
-    
+
     Returns:
-        Current date in the specified timezone
+        Current date in the specified timezone, or UTC if invalid
     """
     try:
         return datetime.now(pytz.timezone(tz_str)).date()
-    except:
+    except pytz.exceptions.UnknownTimeZoneError:
+        # Invalid timezone string, fall back to UTC
         return datetime.now(pytz.utc).date()
 
 

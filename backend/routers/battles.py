@@ -73,12 +73,13 @@ async def get_current_battle(user = Depends(get_current_user)):
         rival_id = battle['user1_id']
         
     user_tz = user_profile.get('timezone', 'UTC')
-    
+
     try:
         user_today = datetime.now(pytz.timezone(user_tz)).date()
-    except:
+    except pytz.exceptions.UnknownTimeZoneError:
+        # Invalid timezone in profile, fall back to UTC
         user_today = datetime.now(pytz.utc).date()
-    
+
     if battle['status'] == 'pending':
         app_state = 'PENDING_ACCEPTANCE'
     elif battle['status'] == 'completed':
@@ -106,11 +107,12 @@ async def get_current_battle(user = Depends(get_current_user)):
     
     # 2. Helper to get local date
     def get_local_date(tz_str):
+        """Get local date for timezone, falling back to UTC for invalid timezones."""
         try:
             return datetime.now(pytz.timezone(tz_str)).date()
-        except:
+        except pytz.exceptions.UnknownTimeZoneError:
             return datetime.now(pytz.utc).date()
-            
+
     date1 = get_local_date(tz1)
     date2 = get_local_date(tz2)
     

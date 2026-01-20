@@ -11,10 +11,11 @@ from models import TaskCreate, Task
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 def get_user_date(timezone_str: str) -> date:
+    """Get user's local date, falling back to UTC for invalid timezones."""
     try:
         tz = pytz.timezone(timezone_str)
         return datetime.now(tz).date()
-    except:
+    except pytz.exceptions.UnknownTimeZoneError:
         return datetime.now(pytz.utc).date()
 
 import hashlib
