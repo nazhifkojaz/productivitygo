@@ -419,22 +419,22 @@ async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
     completed_battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
     if not completed_battle_res.data:
         raise HTTPException(status_code=404, detail="Battle not found")
-    
+
     completed_battle = completed_battle_res.data[0]
     user1_id = completed_battle['user1_id']
     user2_id = completed_battle['user2_id']
-    
-    # Get all pending battles and filter in Python (PostgREST .or_() chaining doesn't work as expected)
-    all_pending = supabase.table("battles").select("*").eq("status", "pending").execute()
-    
-    # Find pending battle between same users
-    matching = [p for p in all_pending.data 
-                if (p['user1_id'] == user1_id and p['user2_id'] == user2_id) 
-                or (p['user1_id'] == user2_id and p['user2_id'] == user1_id)]
-    
-    if matching:
+
+    # REFACTOR-006: Use database-level filtering instead of fetching all pending battles
+    # This query finds pending battles between the same users in either order:
+    # (user1_id=ALICE AND user2_id=BOB) OR (user1_id=BOB AND user2_id=ALICE)
+    matching_res = supabase.table("battles").select("*")\
+        .eq("status", "pending")\
+        .or_(f"and(user1_id.eq.{user1_id},user2_id.eq.{user2_id}),and(user1_id.eq.{user2_id},user2_id.eq.{user1_id})")\
+        .execute()
+
+    if matching_res.data:
         # Take the most recent one
-        pending = max(matching, key=lambda b: b['created_at'])
+        pending = max(matching_res.data, key=lambda b: b['created_at'])
         requester_id = pending['user1_id']
         return {
             "exists": True,
