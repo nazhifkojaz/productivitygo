@@ -9,6 +9,7 @@ from dependencies import get_current_user
 from models import TaskCreate, Task
 from utils.quota import get_daily_quota
 from utils.game_session import get_active_game_session, get_daily_entry_key
+from utils.query_columns import PROFILE_TIMEZONE, TASKS_FULL
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -40,7 +41,7 @@ async def get_quota(date_str: str = None, user = Depends(get_current_user)):
 @router.post("/draft", operation_id="draft_tasks")
 async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user)):
     # 1. Get User Profile to know Timezone
-    profile_res = supabase.table("profiles").select("*").eq("id", user.id).single().execute()
+    profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     
@@ -145,7 +146,7 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
 @router.get("/today", response_model=List[Task], operation_id="get_today_tasks")
 async def get_today_tasks(user = Depends(get_current_user)):
     # 1. Get User Profile
-    profile_res = supabase.table("profiles").select("*").eq("id", user.id).single().execute()
+    profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     
@@ -166,13 +167,13 @@ async def get_today_tasks(user = Depends(get_current_user)):
     entry_id = entry_res.data[0]['id']
     
     # 3. Get Tasks
-    tasks_res = supabase.table("tasks").select("*").eq("daily_entry_id", entry_id).execute()
+    tasks_res = supabase.table("tasks").select(TASKS_FULL).eq("daily_entry_id", entry_id).execute()
     return tasks_res.data
 
 @router.get("/draft", response_model=List[Task], operation_id="get_draft_tasks")
 async def get_draft_tasks(user = Depends(get_current_user)):
     # 1. Get User Profile
-    profile_res = supabase.table("profiles").select("*").eq("id", user.id).single().execute()
+    profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     
@@ -192,7 +193,7 @@ async def get_draft_tasks(user = Depends(get_current_user)):
     entry_id = entry_res.data[0]['id']
     
     # 3. Get Tasks
-    tasks_res = supabase.table("tasks").select("*").eq("daily_entry_id", entry_id).execute()
+    tasks_res = supabase.table("tasks").select(TASKS_FULL).eq("daily_entry_id", entry_id).execute()
     return tasks_res.data
 
 @router.post("/{task_id}/complete", operation_id="complete_task")

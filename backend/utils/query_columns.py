@@ -43,3 +43,23 @@ PROFILE_EXISTS = "id"
 
 # For basic profile lookup (username display)
 PROFILE_BASIC = "id, username"
+
+# For timezone-based date calculations
+PROFILE_TIMEZONE = "timezone"
+
+# For private profile endpoint (all user-visible fields)
+PROFILE_PRIVATE = "id, username, email, level, total_xp_earned, battle_count, battle_win_count, completed_tasks, avatar_emoji, timezone"
+
+# =============================================================================
+# Tasks Table Columns
+# =============================================================================
+
+# For fetching tasks (all fields needed for response)
+TASKS_FULL = "id, daily_entry_id, content, is_optional, assigned_score, is_completed, proof_url, created_at"
+
+# =============================================================================
+# Battle Table Columns (Additions)
+# =============================================================================
+
+# For match history display
+BATTLE_MATCH_HISTORY = "id, user1_id, user2_id, winner_id, end_date, duration, status"

@@ -15,8 +15,12 @@ from utils.query_columns import (
     BATTLE_PENDING_CHECK,
     BATTLE_RELOAD,
     BATTLE_FOR_DECLINE,
+    BATTLE_MATCH_HISTORY,
     PROFILE_EXISTS,
     PROFILE_BASIC,
+    PROFILE_TIMEZONE,
+    PROFILE_PRIVATE,
+    TASKS_FULL,
 )
 
 
@@ -98,6 +102,43 @@ class TestProfileQueryColumns:
         """Verify PROFILE_BASIC has id and username."""
         fields = PROFILE_BASIC.split(", ")
         assert fields == ["id", "username"]
+
+    def test_profile_timezone_only_has_timezone(self):
+        """Verify PROFILE_TIMEZONE only has timezone."""
+        assert PROFILE_TIMEZONE == "timezone"
+
+    def test_profile_private_contains_all_user_fields(self):
+        """Verify PROFILE_PRIVATE contains all user-visible fields."""
+        expected = {
+            "id", "username", "email", "level", "total_xp_earned",
+            "battle_count", "battle_win_count", "completed_tasks",
+            "avatar_emoji", "timezone"
+        }
+        actual = set(PROFILE_PRIVATE.split(", "))
+        assert actual == expected
+
+
+class TestTasksQueryColumns:
+    """Test tasks table column constants."""
+
+    def test_tasks_full_contains_all_task_fields(self):
+        """Verify TASKS_FULL contains all fields needed for task response."""
+        expected = {
+            "id", "daily_entry_id", "content", "is_optional",
+            "assigned_score", "is_completed", "proof_url", "created_at"
+        }
+        actual = set(TASKS_FULL.split(", "))
+        assert actual == expected
+
+
+class TestBattleQueryColumnsExtended:
+    """Test additional battle table column constants."""
+
+    def test_battle_match_history_contains_needed_fields(self):
+        """Verify BATTLE_MATCH_HISTORY contains fields for match history display."""
+        expected = {"id", "user1_id", "user2_id", "winner_id", "end_date", "duration", "status"}
+        actual = set(BATTLE_MATCH_HISTORY.split(", "))
+        assert actual == expected
 
 
 class TestColumnConsistency:

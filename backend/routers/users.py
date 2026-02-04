@@ -11,6 +11,7 @@ from utils.rank_calculations import (
 )
 from utils.stats import format_win_rate
 from utils.logging_config import get_logger
+from utils.query_columns import PROFILE_PRIVATE, BATTLE_MATCH_HISTORY, PROFILE_TIMEZONE
 
 router = APIRouter(prefix="/users", tags=["users"])
 logger = get_logger(__name__)
@@ -60,7 +61,7 @@ def update_profile(update_data: UserUpdate, user = Depends(get_current_user)):
 def get_profile(user = Depends(get_current_user)):
     try:
         # Fetch Profile
-        response = supabase.table("profiles").select("*").eq("id", user.id).single().execute()
+        response = supabase.table("profiles").select(PROFILE_PRIVATE).eq("id", user.id).single().execute()
         profile = response.data
         
         if not profile:
@@ -200,7 +201,7 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
         rank = calculate_rank(level, battle_count, battle_win_count)
 
         # Fetch Match History (Last 5 battles)
-        battles_res = supabase.table("battles").select("*")\
+        battles_res = supabase.table("battles").select(BATTLE_MATCH_HISTORY)\
             .or_(f"user1_id.eq.{user_id},user2_id.eq.{user_id}")\
             .eq("status", "completed")\
             .order("end_date", desc=True)\
