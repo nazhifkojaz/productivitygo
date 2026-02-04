@@ -10,6 +10,7 @@ from services.battle_service import BattleService
 from utils.rank_calculations import calculate_rank
 from utils.quota import get_daily_quota
 from utils.stats import format_win_rate
+from utils.query_columns import BATTLE_FOR_REMATCH, BATTLE_RELOAD, BATTLE_PENDING_CHECK
 
 router = APIRouter(prefix="/battles", tags=["battles"])
 
@@ -55,10 +56,10 @@ async def get_current_battle(user = Depends(get_current_user)):
         rounds_processed = process_battle_rounds(battle)
         if rounds_processed > 0:
             # Reload battle to get updated status/current_round
-            # We need to reload with the same join if we want to be consistent, 
+            # We need to reload with the same join if we want to be consistent,
             # but usually just reloading the battle row is enough for status check.
             # However, to keep 'battle' object consistent with embedded data, let's just update the fields we know changed.
-            battle_reload = supabase.table("battles").select("*").eq("id", battle['id']).single().execute()
+            battle_reload = supabase.table("battles").select(BATTLE_RELOAD).eq("id", battle['id']).single().execute()
             if battle_reload.data:
                 # Update only battle fields, keep embedded profiles
                 battle.update(battle_reload.data)
@@ -416,7 +417,7 @@ async def rematch_battle(battle_id: str, user = Depends(get_current_user)):
 @router.get("/{battle_id}/pending-rematch", operation_id="get_pending_rematch")
 async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
     # Get the completed battle to find users
-    completed_battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+    completed_battle_res = supabase.table("battles").select(BATTLE_FOR_REMATCH).eq("id", battle_id).execute()
     if not completed_battle_res.data:
         raise HTTPException(status_code=404, detail="Battle not found")
 
@@ -427,7 +428,7 @@ async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
     # REFACTOR-006: Use database-level filtering instead of fetching all pending battles
     # This query finds pending battles between the same users in either order:
     # (user1_id=ALICE AND user2_id=BOB) OR (user1_id=BOB AND user2_id=ALICE)
-    matching_res = supabase.table("battles").select("*")\
+    matching_res = supabase.table("battles").select(BATTLE_PENDING_CHECK)\
         .eq("status", "pending")\
         .or_(f"and(user1_id.eq.{user1_id},user2_id.eq.{user2_id}),and(user1_id.eq.{user2_id},user2_id.eq.{user1_id})")\
         .execute()
