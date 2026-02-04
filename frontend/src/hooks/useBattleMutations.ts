@@ -8,7 +8,7 @@ export function useBattleMutations() {
 
     const acceptInviteMutation = useMutation({
         mutationFn: async (battleId: string) => {
-            return axios.post(`/api/battles/${battleId}/accept`, {}, {
+            return axios.post(`/api/invites/${battleId}/accept`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
         },
@@ -22,7 +22,7 @@ export function useBattleMutations() {
 
     const rejectInviteMutation = useMutation({
         mutationFn: async (battleId: string) => {
-            return axios.post(`/api/battles/${battleId}/reject`, {}, {
+            return axios.post(`/api/invites/${battleId}/reject`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
         },

@@ -8,7 +8,7 @@ export function useBattleInvites() {
     return useQuery({
         queryKey: ['battles', 'invites'],
         queryFn: async () => {
-            const { data } = await axios.get('/api/battles/invites', {
+            const { data } = await axios.get('/api/invites/pending', {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             return data;

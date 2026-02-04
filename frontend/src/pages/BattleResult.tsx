@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import RankBadge from '../components/RankBadge';
 import { useBattleDetails } from '../hooks/useBattleDetails';
 import { usePendingRematch } from '../hooks/usePendingRematch';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function BattleResult() {
     const { battleId } = useParams();
@@ -31,12 +32,16 @@ export default function BattleResult() {
 
 
 
+    const queryClient = useQueryClient();
+
     const handleEndCampaign = async () => {
         if (!confirm("End this campaign and return to lobby?")) return;
         try {
             await axios.post(`/api/battles/${battleId}/leave`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
+            // Invalidate cache to ensure Dashboard refetches
+            await queryClient.invalidateQueries({ queryKey: ['currentBattle'] });
             navigate('/dashboard');
         } catch (error) {
             console.error('Failed to leave battle:', error);
@@ -46,7 +51,7 @@ export default function BattleResult() {
 
     const handleRematch = async () => {
         try {
-            await axios.post(`/api/battles/${battleId}/rematch`, {}, {
+            await axios.post(`/api/invites/${battleId}/rematch`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             // Reload to show pending rematch UI
@@ -65,7 +70,7 @@ export default function BattleResult() {
         }
 
         try {
-            await axios.post(`/api/battles/${pendingRematch.battle_id}/accept`, {}, {
+            await axios.post(`/api/invites/${pendingRematch.battle_id}/accept`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             toast.success("Rematch accepted! Good luck!");
@@ -80,7 +85,7 @@ export default function BattleResult() {
         if (!pendingRematch?.battle_id) return;
         if (!confirm("Decline rematch? This will end the campaign.")) return;
         try {
-            await axios.post(`/api/battles/${pendingRematch.battle_id}/decline`, {}, {
+            await axios.post(`/api/invites/${pendingRematch.battle_id}/decline`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             // Also leave the battle to clear current_battle

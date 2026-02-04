@@ -8,7 +8,7 @@ export function usePendingRematch(battleId: string | undefined) {
     return useQuery({
         queryKey: ['battles', battleId, 'pendingRematch'],
         queryFn: async () => {
-            const { data } = await axios.get(`/api/battles/${battleId}/pending-rematch`, {
+            const { data } = await axios.get(`/api/invites/${battleId}/pending-rematch`, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             return data;
