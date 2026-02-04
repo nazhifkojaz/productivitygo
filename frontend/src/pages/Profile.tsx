@@ -7,6 +7,7 @@ import { Edit2, X, Save, LogOut, ArrowLeft, Key, Shield } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
+import ProfileStats from '../components/ProfileStats';
 
 const EMOJI_OPTIONS = [
     '😀', '😃', '😄', '😎', '🤓', '🥳', '🤩', '😊', '🤗', '🤔',
@@ -167,28 +168,7 @@ export default function Profile() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
-                        <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors">
-                            <div className="text-3xl font-black">{profileData?.stats?.battle_wins || 0}</div>
-                            <div className="text-xs font-bold uppercase text-gray-500">Battle Wins</div>
-                        </div>
-                        <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors">
-                            <div className="text-3xl font-black">{profileData?.stats?.total_xp || 0}</div>
-                            <div className="text-xs font-bold uppercase text-gray-500">Total XP</div>
-                        </div>
-                        <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors">
-                            <div className="text-3xl font-black">{profileData?.stats?.battle_fought || 0}</div>
-                            <div className="text-xs font-bold uppercase text-gray-500">Battle Fought</div>
-                        </div>
-                        <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors">
-                            <div className="text-3xl font-black">{profileData?.stats?.win_rate || '0%'}</div>
-                            <div className="text-xs font-bold uppercase text-gray-500">Win Rate</div>
-                        </div>
-                        <div className="bg-gray-50 border-3 border-black p-4 text-center hover:bg-white transition-colors md:col-span-2">
-                            <div className="text-3xl font-black">{profileData?.stats?.tasks_completed || 0}</div>
-                            <div className="text-xs font-bold uppercase text-gray-500">Tasks Completed</div>
-                        </div>
-                    </div>
+                    <ProfileStats stats={profileData?.stats} />
                 </div>
 
                 {/* Settings Section */}
