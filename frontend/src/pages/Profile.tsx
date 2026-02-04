@@ -3,11 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, X, Save, LogOut, ArrowLeft, Key, Shield } from 'lucide-react';
+import { Edit2, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
 import ProfileStats from '../components/ProfileStats';
+import ProfileEditForm from '../components/ProfileEditForm';
+import SecuritySettings from '../components/SecuritySettings';
 
 const EMOJI_OPTIONS = [
     '😀', '😃', '😄', '😎', '🤓', '🥳', '🤩', '😊', '🤗', '🤔',
@@ -24,11 +26,6 @@ export default function Profile() {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [selectedEmoji, setSelectedEmoji] = useState('😀');
     const [profileData, setProfileData] = useState<any>(null);
-
-    // Password Change State
-    const [isChangingPassword, setIsChangingPassword] = useState(false);
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
 
     useEffect(() => {
         if (session?.access_token) {
@@ -88,26 +85,32 @@ export default function Profile() {
         }
     };
 
-    const handleChangePassword = async () => {
-        if (newPassword !== confirmPassword) {
-            toast.error("Passwords do not match!");
-            return;
-        }
-        setLoading(true);
+    const handleChangePassword = async (newPassword: string) => {
         try {
             const { error } = await supabase.auth.updateUser({ password: newPassword });
             if (error) {
                 throw error;
             }
             toast.success("Password updated successfully!");
-            setIsChangingPassword(false);
-            setNewPassword('');
-            setConfirmPassword('');
         } catch (error: any) {
             console.error("Failed to update password", error);
             toast.error(error.message);
-        } finally {
-            setLoading(false);
+            throw error;
+        }
+    };
+
+    const handleTimezoneSync = async (timezone: string) => {
+        if (!session?.access_token) return;
+        try {
+            await axios.put('/api/users/profile',
+                { timezone },
+                { headers: { Authorization: `Bearer ${session.access_token}` } }
+            );
+            toast.success(`Timezone updated to ${timezone}`);
+            loadProfile();
+        } catch (error) {
+            toast.error("Failed to update timezone");
+            throw error;
         }
     };
 
@@ -171,155 +174,27 @@ export default function Profile() {
                     <ProfileStats stats={profileData?.stats} />
                 </div>
 
-                {/* Settings Section */}
-                <div className="bg-neo-secondary border-3 border-black p-6 md:p-8 shadow-neo">
-                    <h3 className="text-xl font-black uppercase mb-6 flex items-center gap-2">
-                        <Shield className="w-6 h-6" /> Account Security
-                    </h3>
-
-                    <div className="space-y-4">
-                        {!isChangingPassword ? (
-                            <button
-                                onClick={() => setIsChangingPassword(true)}
-                                className="w-full bg-white border-3 border-black p-4 font-bold uppercase hover:bg-gray-50 flex items-center justify-between group"
-                            >
-                                <span className="flex items-center gap-2"><Key className="w-5 h-5" /> Change Password</span>
-                                <span className="text-neo-primary group-hover:translate-x-1 transition-transform">→</span>
-                            </button>
-                        ) : (
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                className="bg-white border-3 border-black p-6"
-                            >
-                                <div className="space-y-4">
-                                    <input
-                                        type="password"
-                                        placeholder="New Password"
-                                        value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
-                                        className="w-full input-neo"
-                                    />
-                                    <input
-                                        type="password"
-                                        placeholder="Confirm Password"
-                                        value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
-                                        className="w-full input-neo"
-                                    />
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleChangePassword}
-                                            disabled={loading}
-                                            className="flex-1 btn-neo bg-neo-primary text-white py-2 font-bold uppercase"
-                                        >
-                                            {loading ? 'Updating...' : 'Update Password'}
-                                        </button>
-                                        <button
-                                            onClick={() => setIsChangingPassword(false)}
-                                            className="px-4 btn-neo bg-gray-200 hover:bg-gray-300 font-bold uppercase"
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-
-                        {/* Timezone Sync */}
-                        <div className="bg-white border-3 border-black p-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold">🌍 Timezone</span>
-                                    <span className="text-gray-600">{profileData?.timezone || 'UTC'}</span>
-                                </div>
-                                <button
-                                    onClick={async () => {
-                                        if (!session?.access_token) return;
-                                        const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                                        setLoading(true);
-                                        try {
-                                            await axios.put('/api/users/profile',
-                                                { timezone: detectedTimezone },
-                                                { headers: { Authorization: `Bearer ${session.access_token}` } }
-                                            );
-                                            toast.success(`Timezone updated to ${detectedTimezone}`);
-                                            loadProfile();
-                                        } catch (error) {
-                                            toast.error("Failed to update timezone");
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    }}
-                                    className="btn-neo bg-neo-accent px-4 py-2 font-bold text-sm uppercase hover:bg-yellow-400 transition-colors"
-                                >
-                                    Sync to Device
-                                </button>
-                            </div>
-                            <p className="text-xs text-gray-500 font-bold">
-                                Automatically detected: {Intl.DateTimeFormat().resolvedOptions().timeZone}
-                            </p>
-                        </div>
-
-                        <button
-                            onClick={() => signOut()}
-                            className="w-full bg-red-400 border-3 border-black p-4 font-bold uppercase hover:bg-red-500 flex items-center justify-center gap-2 shadow-sm hover:shadow-none hover:translate-y-0.5 transition-all"
-                        >
-                            <LogOut className="w-5 h-5" /> Sign Out
-                        </button>
-                    </div>
-                </div>
+                {/* Settings Section - Extracted to SecuritySettings */}
+                <SecuritySettings
+                    currentTimezone={profileData?.timezone}
+                    detectedTimezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                    onTimezoneSync={handleTimezoneSync}
+                    onSignOut={signOut}
+                    onChangePassword={handleChangePassword}
+                />
 
             </div>
 
-            {/* Edit Profile Modal */}
-            <AnimatePresence>
-                {isEditing && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.9, y: 20 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.9, y: 20 }}
-                            className="bg-neo-white border-3 border-black p-6 shadow-neo w-full max-w-md relative"
-                        >
-                            <button
-                                onClick={() => setIsEditing(false)}
-                                className="absolute top-2 right-2 p-1 hover:bg-gray-100"
-                            >
-                                <X className="w-6 h-6" />
-                            </button>
-
-                            <h2 className="text-xl font-black uppercase mb-6">Edit Identity</h2>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block font-bold text-sm mb-1">Username</label>
-                                    <input
-                                        type="text"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        className="w-full input-neo"
-                                        placeholder="Enter username"
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={handleSaveProfile}
-                                    disabled={loading}
-                                    className="w-full btn-neo bg-neo-primary text-white py-3 font-bold uppercase flex items-center justify-center gap-2"
-                                >
-                                    {loading ? 'Saving...' : <><Save className="w-5 h-5" /> Save Changes</>}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* Edit Profile Modal - Extracted to ProfileEditForm */}
+            <ProfileEditForm
+                isOpen={isEditing}
+                initialUsername={username}
+                loading={loading}
+                onSave={async () => {
+                    await handleSaveProfile();
+                }}
+                onClose={() => setIsEditing(false)}
+            />
 
             {/* Emoji Picker Modal */}
             <AnimatePresence>
@@ -344,7 +219,7 @@ export default function Profile() {
                                     onClick={() => setShowEmojiPicker(false)}
                                     className="p-2 hover:bg-gray-100 border-2 border-black"
                                 >
-                                    <X className="w-5 h-5" />
+                                    ←
                                 </button>
                             </div>
 
