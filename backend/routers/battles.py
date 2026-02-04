@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from datetime import date, timedelta, datetime
 import pytz
-from pydantic import BaseModel
 
 from database import supabase
 from dependencies import get_current_user
@@ -10,20 +9,9 @@ from services.battle_service import BattleService
 from utils.rank_calculations import calculate_rank
 from utils.quota import get_daily_quota
 from utils.stats import format_win_rate
-from utils.query_columns import BATTLE_FOR_REMATCH, BATTLE_RELOAD, BATTLE_PENDING_CHECK
+from utils.query_columns import BATTLE_RELOAD
 
 router = APIRouter(prefix="/battles", tags=["battles"])
-
-class BattleInvite(BaseModel):
-    rival_email: str
-
-class BattleResponse(BaseModel):
-    id: str
-    user1_id: str
-    user2_id: str
-    status: str
-    start_date: str
-    end_date: str
 
 @router.get("/current", operation_id="get_current_battle")
 async def get_current_battle(user = Depends(get_current_user)):
@@ -258,47 +246,6 @@ async def get_current_battle(user = Depends(get_current_user)):
         
     return battle
 
-@router.get("/invites", operation_id="get_invites")
-async def get_invites(user = Depends(get_current_user)):
-    # Find pending battles where user is the invitee (user2)
-    # We assume user1 is always the inviter for now
-    res = supabase.table("battles").select("*, user1:profiles!user1_id(username)")\
-        .eq("user2_id", user.id)\
-        .eq("status", "pending")\
-        .execute()
-    return res.data
-
-class InviteRequest(BaseModel):
-    rival_id: str    # User UUID
-    start_date: str  # YYYY-MM-DD
-    duration: int    # 3-5 days
-
-@router.post("/invite", operation_id="invite_user")
-async def invite_user(invite: InviteRequest, user = Depends(get_current_user)):
-    """
-    Create a new battle invite.
-    """
-    battle = BattleService.create_invite(user.id, invite.rival_id, invite.start_date, invite.duration)
-    return {"status": "success", "battle": battle}
-
-
-@router.post("/{battle_id}/accept", operation_id="accept_battle")
-async def accept_battle(battle_id: str, user = Depends(get_current_user)):
-    """
-    Accept a pending battle invite.
-    """
-    BattleService.accept_invite(battle_id, user.id)
-    # Fetch updated battle to return
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
-    return battle_res.data
-
-@router.post("/{battle_id}/reject", operation_id="reject_battle")
-async def reject_battle(battle_id: str, user = Depends(get_current_user)):
-    """
-    Reject or cancel a battle invite.
-    """
-    return BattleService.reject_invite(battle_id, user.id)
-
 @router.post("/{battle_id}/forfeit", operation_id="forfeit_battle")
 async def forfeit_battle(battle_id: str, user = Depends(get_current_user)):
     """
@@ -409,43 +356,3 @@ async def get_battle_details(battle_id: str, user = Depends(get_current_user)):
 @router.post("/{battle_id}/archive", operation_id="archive_battle")
 async def archive_battle(battle_id: str, user = Depends(get_current_user)):
     return BattleService.archive_battle(battle_id)
-
-@router.post("/{battle_id}/rematch", operation_id="rematch_battle")
-async def rematch_battle(battle_id: str, user = Depends(get_current_user)):
-    return BattleService.create_rematch(battle_id, user.id)
-
-@router.get("/{battle_id}/pending-rematch", operation_id="get_pending_rematch")
-async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
-    # Get the completed battle to find users
-    completed_battle_res = supabase.table("battles").select(BATTLE_FOR_REMATCH).eq("id", battle_id).execute()
-    if not completed_battle_res.data:
-        raise HTTPException(status_code=404, detail="Battle not found")
-
-    completed_battle = completed_battle_res.data[0]
-    user1_id = completed_battle['user1_id']
-    user2_id = completed_battle['user2_id']
-
-    # REFACTOR-006: Use database-level filtering instead of fetching all pending battles
-    # This query finds pending battles between the same users in either order:
-    # (user1_id=ALICE AND user2_id=BOB) OR (user1_id=BOB AND user2_id=ALICE)
-    matching_res = supabase.table("battles").select(BATTLE_PENDING_CHECK)\
-        .eq("status", "pending")\
-        .or_(f"and(user1_id.eq.{user1_id},user2_id.eq.{user2_id}),and(user1_id.eq.{user2_id},user2_id.eq.{user1_id})")\
-        .execute()
-
-    if matching_res.data:
-        # Take the most recent one
-        pending = max(matching_res.data, key=lambda b: b['created_at'])
-        requester_id = pending['user1_id']
-        return {
-            "exists": True,
-            "battle_id": pending['id'],
-            "requester_id": requester_id,
-            "is_requester": requester_id == user.id
-        }
-    else:
-        return {"exists": False}
-
-@router.post("/{battle_id}/decline", operation_id="decline_rematch")
-async def decline_rematch(battle_id: str, user = Depends(get_current_user)):
-    return BattleService.decline_rematch(battle_id)
