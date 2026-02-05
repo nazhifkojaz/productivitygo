@@ -87,7 +87,8 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
     return {
         "monsters": pool,
         "refreshes_remaining": remaining,
-        "unlocked_tiers": AdventureService.get_unlocked_tiers(rating)
+        "unlocked_tiers": AdventureService.get_unlocked_tiers(rating),
+        "current_rating": rating
     }
 
 
