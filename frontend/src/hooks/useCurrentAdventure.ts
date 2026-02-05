@@ -71,7 +71,7 @@ export function useCurrentAdventure() {
     const { session } = useAuth();
 
     return useQuery({
-        queryKey: ['adventure', 'current'],
+        queryKey: ['adventures', 'current'],
         queryFn: async (): Promise<Adventure> => {
             const { data } = await axios.get<Adventure>(
                 '/api/adventures/current',

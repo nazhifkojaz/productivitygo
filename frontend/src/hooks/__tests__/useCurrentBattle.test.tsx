@@ -207,7 +207,7 @@ describe('useCurrentBattle', () => {
                 wrapper: createWrapper(),
             });
 
-            // Query key should be ['battle', 'current']
+            // Query key should be ['battles', 'current']
             await waitFor(() => expect(result.current.isSuccess).toBe(true));
         });
     });

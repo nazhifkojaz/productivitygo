@@ -92,7 +92,7 @@ describe('useAdventureMutations', () => {
 
             // Check that relevant queries were invalidated
             expect(invalidateSpy).toHaveBeenCalledWith(
-                expect.objectContaining({ queryKey: ['adventure'] })
+                expect.objectContaining({ queryKey: ['adventures'] })
             );
         });
     });
@@ -237,7 +237,7 @@ describe('useAdventureMutations', () => {
             await result.current.scheduleBreakMutation.mutateAsync('adv-123');
 
             expect(invalidateSpy).toHaveBeenCalledWith(
-                expect.objectContaining({ queryKey: ['adventure', 'current'] })
+                expect.objectContaining({ queryKey: ['adventures', 'current'] })
             );
         });
     });

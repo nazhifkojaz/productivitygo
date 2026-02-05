@@ -15,7 +15,7 @@ export function useBattleMutations() {
         onSuccess: () => {
             // Accepting an invite affects: invites list, current battle, and profile
             queryClient.invalidateQueries({ queryKey: ['battles', 'invites'] });
-            queryClient.invalidateQueries({ queryKey: ['battle', 'current'] });
+            queryClient.invalidateQueries({ queryKey: ['battles', 'current'] });
             queryClient.invalidateQueries({ queryKey: ['profile'] });
         },
     });

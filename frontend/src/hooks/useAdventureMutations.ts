@@ -82,7 +82,7 @@ export function useAdventureMutations() {
         },
         onSuccess: () => {
             // Invalidate queries that depend on adventure state
-            queryClient.invalidateQueries({ queryKey: ['adventure'] });
+            queryClient.invalidateQueries({ queryKey: ['adventures'] });
             queryClient.invalidateQueries({ queryKey: ['profile'] });
             queryClient.invalidateQueries({ queryKey: ['monsters'] });
         },
@@ -119,7 +119,7 @@ export function useAdventureMutations() {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adventure'] });
+            queryClient.invalidateQueries({ queryKey: ['adventures'] });
             queryClient.invalidateQueries({ queryKey: ['profile'] });
         },
     });
@@ -137,7 +137,7 @@ export function useAdventureMutations() {
             return data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['adventure', 'current'] });
+            queryClient.invalidateQueries({ queryKey: ['adventures', 'current'] });
         },
     });
 

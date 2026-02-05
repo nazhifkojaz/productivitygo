@@ -37,7 +37,7 @@ export function useAdventureDetails(adventureId: string | undefined) {
     const { session } = useAuth();
 
     return useQuery({
-        queryKey: ['adventure', adventureId],
+        queryKey: ['adventures', adventureId],
         queryFn: async (): Promise<AdventureDetails> => {
             const { data } = await axios.get<AdventureDetails>(
                 `/api/adventures/${adventureId}`,
