@@ -14,14 +14,7 @@ import { useCurrentBattle } from '../hooks/useCurrentBattle';
 import { useProfile } from '../hooks/useProfile';
 import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
-
-interface Task {
-    id: string;
-    content: string;
-    is_completed: boolean;
-    is_optional: boolean;
-    assigned_score: number;
-}
+import type { Task } from '../types';
 
 export default function Dashboard() {
     const { session, user } = useAuth();

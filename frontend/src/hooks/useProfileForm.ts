@@ -4,25 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
-
-interface ProfileStats {
-    battle_wins: number;
-    total_xp: number;
-    battle_fought: number;
-    win_rate: string;
-    tasks_completed: number;
-}
-
-interface ProfileData {
-    id: string;
-    username: string;
-    avatar_emoji: string;
-    timezone: string;
-    level: number;
-    rank: string;
-    stats: ProfileStats;
-    email: string;
-}
+import type { ProfileData } from '../types';
 
 interface UseProfileFormReturn {
     // Data

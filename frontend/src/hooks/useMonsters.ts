@@ -1,28 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-
-/**
- * Monster type definition
- */
-export interface Monster {
-    id: string;
-    name: string;
-    emoji: string;
-    tier: 'easy' | 'medium' | 'hard' | 'expert' | 'boss';
-    base_hp: number;
-    description: string;
-}
-
-/**
- * Response from /adventures/monsters endpoint
- */
-export interface MonsterPoolResponse {
-    monsters: Monster[];
-    refreshes_remaining: number;
-    unlocked_tiers: string[];
-    current_rating: number;
-}
+import type { MonsterPoolResponse } from '../types';
 
 /**
  * Hook to fetch weighted monster pool for adventure selection.
@@ -57,3 +36,6 @@ export function useMonsters() {
         refetchOnWindowFocus: false,
     });
 }
+
+// Re-export Monster type from centralized location for backward compatibility
+export type { Monster } from '../types';

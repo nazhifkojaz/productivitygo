@@ -1,22 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import type { Adventure } from './useCurrentAdventure';
-
-/**
- * Daily breakdown entry
- */
-export interface DailyDamage {
-    date: string;
-    damage: number;
-}
-
-/**
- * Adventure details with daily breakdown
- */
-export interface AdventureDetails extends Adventure {
-    daily_breakdown: DailyDamage[];
-}
+import type { AdventureDetails } from '../types';
 
 /**
  * Hook to fetch adventure details by ID.
@@ -50,3 +35,6 @@ export function useAdventureDetails(adventureId: string | undefined) {
         enabled: !!session?.access_token && !!adventureId,
     });
 }
+
+// Re-export DailyDamage type from centralized location for backward compatibility
+export type { DailyDamage } from '../types';
