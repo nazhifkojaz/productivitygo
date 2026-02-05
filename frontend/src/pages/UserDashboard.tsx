@@ -105,7 +105,7 @@ export default function UserDashboard() {
             }
 
             // Step 2: Send invite using rival_id
-            await axios.post('/invites/send', {
+            await axios.post('/api/invites/send', {
                 rival_id: rivalUser.id,
                 start_date: startDate,
                 duration: duration
