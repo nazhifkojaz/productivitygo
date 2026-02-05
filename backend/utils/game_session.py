@@ -49,15 +49,14 @@ def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
     if battle_res.data:
         return battle_res.data['id'], GameMode.PVP
 
-    # 2. Check for active adventure (placeholder for future implementation)
-    # This section is prepared for REFACTOR-003 Phase 2 when adventure mode is added
-    # adventure_res = supabase.table("adventures").select("id")\
-    #     .eq("user_id", user_id)\
-    #     .eq("status", "active")\
-    #     .single().execute()
-    #
-    # if adventure_res.data:
-    #     return adventure_res.data['id'], GameMode.ADVENTURE
+    # 2. Check for active adventure
+    adventure_res = supabase.table("adventures").select("id")\
+        .eq("user_id", user_id)\
+        .eq("status", "active")\
+        .single().execute()
+
+    if adventure_res.data:
+        return adventure_res.data['id'], GameMode.ADVENTURE
 
     # 3. No active session found
     raise HTTPException(

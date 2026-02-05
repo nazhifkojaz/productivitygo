@@ -1,8 +1,9 @@
 """
 Background Scheduler for Periodic Tasks
 
-Uses APScheduler to run hourly checks on active battles,
-processing rounds when both players have completed their day.
+Uses APScheduler to run hourly checks on:
+- Active battles (PVP)
+- Active adventures (single player)
 
 REFACTOR-007: Replaced print statements with centralized logging.
 """
@@ -10,6 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 from database import supabase
 from utils.battle_processor import process_battle_rounds
+from utils.adventure_processor import process_adventure_rounds
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -44,21 +46,59 @@ def process_active_battles():
     logger.info(f"Hourly check complete. Processed {total_rounds} round(s)")
 
 
+def process_active_adventures():
+    """
+    Hourly job: Check all active adventures and process rounds.
+    """
+    logger.info("Running hourly adventure check")
+
+    try:
+        adventures_res = supabase.table("adventures")\
+            .select("*, monster:monsters(*)")\
+            .eq("status", "active").execute()
+        adventures = adventures_res.data if adventures_res.data else []
+        logger.info(f"Found {len(adventures)} active adventures")
+    except Exception as e:
+        logger.error(f"Error fetching adventures: {e}")
+        return
+
+    total_rounds = 0
+    for adventure in adventures:
+        try:
+            rounds = process_adventure_rounds(adventure)
+            total_rounds += rounds
+        except Exception as e:
+            logger.error(f"Error processing adventure {adventure['id']}: {e}")
+            continue
+
+    logger.info(f"Adventure check complete. Processed {total_rounds} round(s)")
+
+
 # Initialize scheduler
 scheduler = BackgroundScheduler()
 
 def start_scheduler():
     """Start the background scheduler"""
-    # Run every hour
+    # Battle processing job
     scheduler.add_job(
         process_active_battles,
         trigger='cron',
-        minute=0,  # Run at the top of every hour
+        minute=0,
         id='process_battles',
         replace_existing=True
     )
+
+    # Adventure processing job
+    scheduler.add_job(
+        process_active_adventures,
+        trigger='cron',
+        minute=0,
+        id='process_adventures',
+        replace_existing=True
+    )
+
     scheduler.start()
-    logger.info("Background scheduler started (hourly)")
+    logger.info("Background scheduler started (hourly battle + adventure processing)")
 
 def shutdown_scheduler():
     """Gracefully shut down the scheduler"""

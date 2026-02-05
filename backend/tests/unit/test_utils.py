@@ -305,11 +305,17 @@ class TestGetActiveGameSession:
     def test_raises_400_when_no_active_session(self, mock_user):
         """Test that HTTPException raised when no battle or adventure found."""
         with patch('utils.game_session.supabase') as mock_supabase:
-            # Mock no battle found
-            mock_battle_res = Mock()
-            mock_battle_res.data = None
+            # Create empty result objects
+            empty_result = Mock()
+            empty_result.data = None
+
+            # Mock battle check to return no results
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = mock_battle_res
+                .or_.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+
+            # Mock adventure check to return no results (note: TWO .eq() calls)
+            mock_supabase.table.return_value.select.return_value\
+                .eq.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
 
             from utils.game_session import get_active_game_session
 
@@ -338,6 +344,37 @@ class TestGetActiveGameSession:
             from utils.enums import GameMode
             assert game_mode == GameMode.PVP
             assert game_mode.value == "pvp"
+
+    def test_returns_adventure_id_and_adventure_mode_when_active_adventure_exists(self, mock_user):
+        """Test that active adventure returns adventure ID and ADVENTURE mode."""
+        with patch('utils.game_session.supabase') as mock_supabase:
+            # Create empty result for battle
+            empty_result = Mock()
+            empty_result.data = None
+
+            # Create adventure result
+            adventure_result = Mock()
+            adventure_result.data = {'id': 'adventure-789'}
+
+            # Mock battle check to return no results
+            mock_supabase.table.return_value.select.return_value\
+                .or_.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+
+            # Mock adventure check to return adventure
+            # Note: adventure query has TWO .eq() calls, so we need .eq().eq()
+            mock_supabase.table.return_value.select.return_value\
+                .eq.return_value.eq.return_value.single.return_value.execute.return_value = adventure_result
+
+            from utils.game_session import get_active_game_session
+
+            session_id, game_mode = get_active_game_session(mock_user.id)
+
+            assert session_id == "adventure-789"
+            assert game_mode == "adventure"
+
+            from utils.enums import GameMode
+            assert game_mode == GameMode.ADVENTURE
+            assert game_mode.value == "adventure"
 
 
 # =============================================================================
@@ -392,12 +429,18 @@ class TestHasActiveGameSession:
             assert result is True
 
     def test_returns_false_when_user_has_no_active_battle(self, mock_user):
-        """Test that False is returned when user has no active battle."""
+        """Test that False is returned when user has no active battle OR adventure."""
         with patch('utils.game_session.supabase') as mock_supabase:
-            mock_battle_res = Mock()
-            mock_battle_res.data = None
+            empty_result = Mock()
+            empty_result.data = None
+
+            # Mock battle check to return no results
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = mock_battle_res
+                .or_.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+
+            # Mock adventure check to also return no results (note: TWO .eq() calls)
+            mock_supabase.table.return_value.select.return_value\
+                .eq.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
 
             from utils.game_session import has_active_game_session
 
