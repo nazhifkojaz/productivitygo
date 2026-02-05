@@ -8,7 +8,7 @@ export function useCurrentBattle() {
     return useQuery({
         queryKey: ['battle', 'current'],
         queryFn: async () => {
-            const { data } = await axios.get('/battles/current', {
+            const { data } = await axios.get('/api/battles/current', {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             return data;
