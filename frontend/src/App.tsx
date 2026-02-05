@@ -124,8 +124,6 @@ const BattleRouter = () => {
   return <UserDashboard />;
 };
 
-// import EditProfile from './pages/EditProfile';
-
 function App() {
   return (
     <Router basename={import.meta.env.BASE_URL}>
@@ -133,7 +131,6 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          {/* <Route path="/profile/edit" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} /> */}
           <Route path="/dashboard" element={<ProtectedRoute><BattleRouter /></ProtectedRoute>} />
           <Route path="/plan" element={<ProtectedRoute><PlanTasks /></ProtectedRoute>} />
           <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
