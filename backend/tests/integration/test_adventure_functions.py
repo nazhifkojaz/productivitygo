@@ -28,27 +28,32 @@ except ImportError:
     DB_AVAILABLE = False
 
 
-# Get real test data from database
+# Get test data from database
 @pytest.fixture(scope='module')
 def test_data(db_conn):
-    """Get real user and monster IDs from database for testing."""
+    """Get test user and monster ID for testing.
+
+    Uses a designated test user (80c0d05e-e927-4860-a17e-8bb085df6fbb)
+    to avoid affecting random real users.
+    """
     cursor = db_conn.cursor()
     try:
-        # Get a real user ID from profiles
-        cursor.execute("SELECT id FROM profiles LIMIT 1;")
+        # Use the designated test user
+        test_user_id = '80c0d05e-e927-4860-a17e-8bb085df6fbb'
+        cursor.execute("SELECT id FROM profiles WHERE id = %s;", (test_user_id,))
         result = cursor.fetchone()
-        if not result:
-            pytest.skip("No users in profiles table. Create a test user first.")
-        user_id = result[0]
 
-        # Get a real monster ID
+        if not result:
+            pytest.skip("Test user not found. Ensure user 80c0d05e-e927-4860-a17e-8bb085df6fbb exists.")
+
+        # Get a monster ID
         cursor.execute("SELECT id FROM monsters WHERE tier = 'easy' LIMIT 1;")
         result = cursor.fetchone()
         if not result:
             pytest.skip("No monsters in database. Run seed_monsters.sql first.")
         monster_id = result[0]
 
-        return {'user_id': user_id, 'monster_id': monster_id}
+        return {'user_id': test_user_id, 'monster_id': monster_id}
     finally:
         cursor.close()
 
@@ -75,6 +80,9 @@ def cleanup_test_data(db_conn, test_data):
     try:
         # Rollback any pending transaction first
         db_conn.rollback()
+        # Clear current_adventure reference BEFORE deleting adventures
+        cursor.execute("UPDATE profiles SET current_adventure = NULL WHERE id = %s;", (user_id,))
+        # Delete related data
         cursor.execute("DELETE FROM tasks WHERE daily_entry_id IN (SELECT id FROM daily_entries WHERE user_id = %s);", (user_id,))
         cursor.execute("DELETE FROM daily_entries WHERE user_id = %s;", (user_id,))
         cursor.execute("DELETE FROM adventures WHERE user_id = %s;", (user_id,))

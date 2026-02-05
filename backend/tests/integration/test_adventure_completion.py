@@ -33,18 +33,23 @@ except ImportError:
     DB_AVAILABLE = False
 
 
-# Get real test data from database
+# Get test data from database
 @pytest.fixture(scope='module')
 def test_data(db_conn):
-    """Get real user and monster IDs from database for testing."""
+    """Get test user and monster IDs for testing.
+
+    Uses a designated test user (80c0d05e-e927-4860-a17e-8bb085df6fbb)
+    to avoid affecting random real users.
+    """
     cursor = db_conn.cursor()
     try:
-        # Get a real user ID from profiles
-        cursor.execute("SELECT id FROM profiles LIMIT 1;")
+        # Use the designated test user
+        test_user_id = '80c0d05e-e927-4860-a17e-8bb085df6fbb'
+        cursor.execute("SELECT id FROM profiles WHERE id = %s;", (test_user_id,))
         result = cursor.fetchone()
+
         if not result:
-            pytest.skip("No users in profiles table. Create a test user first.")
-        user_id = result[0]
+            pytest.skip("Test user not found. Ensure user 80c0d05e-e927-4860-a17e-8bb085df6fbb exists.")
 
         # Get monsters of different tiers
         cursor.execute("SELECT id, tier FROM monsters WHERE tier = 'easy' LIMIT 1;")
@@ -64,7 +69,7 @@ def test_data(db_conn):
         boss_monster_id = boss_result[0] if boss_result else easy_monster_id
 
         return {
-            'user_id': user_id,
+            'user_id': test_user_id,
             'easy_monster_id': easy_monster_id,
             'medium_monster_id': medium_monster_id,
             'boss_monster_id': boss_monster_id
