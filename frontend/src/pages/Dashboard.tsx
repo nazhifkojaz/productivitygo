@@ -6,11 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     Shield, Zap, Check, Plus,
-    User, AlertTriangle, Flag
+    User, AlertTriangle, Flag, Coffee
 } from 'lucide-react';
 import RivalRadar from '../components/RivalRadar';
+import MonsterCard from '../components/MonsterCard';
 import { useCurrentBattle } from '../hooks/useCurrentBattle';
 import { useProfile } from '../hooks/useProfile';
+import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
+import { useAdventureMutations } from '../hooks/useAdventureMutations';
 
 interface Task {
     id: string;
@@ -23,10 +26,16 @@ interface Task {
 export default function Dashboard() {
     const { session, user } = useAuth();
     const navigate = useNavigate();
-    const { data: battle, isLoading } = useCurrentBattle();
+    const { data: battle, isLoading: battleLoading } = useCurrentBattle();
     const { data: profile } = useProfile();
+    const { data: adventure, isLoading: adventureLoading } = useCurrentAdventure();
+    const { abandonAdventureMutation, scheduleBreakMutation } = useAdventureMutations();
     const [tasks, setTasks] = useState<Task[]>([]);
     const [timeUntilBattle, setTimeUntilBattle] = useState<string>('');
+
+    // Determine game mode - adventure takes priority if both exist
+    const isAdventureMode = !!adventure && !battle;
+    const isLoading = battleLoading || adventureLoading;
 
     useEffect(() => {
         if (battle) {
@@ -165,6 +174,37 @@ export default function Dashboard() {
         }
     };
 
+    const handleRetreat = async () => {
+        if (!adventure) return;
+        if (!confirm("Retreat from adventure? You'll receive 50% of earned XP.")) return;
+
+        try {
+            await abandonAdventureMutation.mutateAsync(adventure.id);
+            toast.success("Retreated from adventure");
+            navigate(`/adventure-result/${adventure.id}`);
+        } catch (error) {
+            console.error("Failed to retreat", error);
+            toast.error("Failed to retreat from adventure");
+        }
+    };
+
+    const handleScheduleBreak = async () => {
+        if (!adventure) return;
+        if (adventure.break_days_used >= 2) {
+            toast.error("No break days remaining");
+            return;
+        }
+        if (!confirm("Schedule a break day for tomorrow? The deadline will extend by 1 day.")) return;
+
+        try {
+            await scheduleBreakMutation.mutateAsync(adventure.id);
+            toast.success("Break day scheduled for tomorrow!");
+        } catch (error: any) {
+            console.error("Failed to schedule break", error);
+            toast.error(error.response?.data?.detail || "Failed to schedule break");
+        }
+    };
+
     return (
         <main className="min-h-screen bg-neo-bg p-4 md:p-8 pb-48 flex flex-col items-center">
             {/* Header */}
@@ -172,7 +212,14 @@ export default function Dashboard() {
                 <div className="bg-neo-white border-3 border-black p-4 shadow-neo-sm">
                     <h1 className="text-2xl font-black italic uppercase">Battle <span className="text-neo-primary">Dashboard</span></h1>
                     <div className="text-xs font-bold text-gray-500">
-                        {isPreBattle ? 'PREPARING FOR BATTLE' : isPending ? 'AWAITING RIVAL' : `ROUND ${battle?.rounds_played || 1} / 5`}
+                        {isAdventureMode
+                            ? `DAY ${adventure?.current_round || 1} • ${adventure?.days_remaining || 0} DAYS LEFT`
+                            : isPreBattle
+                                ? 'PREPARING FOR BATTLE'
+                                : isPending
+                                    ? 'AWAITING RIVAL'
+                                    : `ROUND ${battle?.rounds_played || 1} / 5`
+                        }
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -227,8 +274,12 @@ export default function Dashboard() {
             )}
 
             <div className="w-full max-w-3xl space-y-8">
-                {/* Rival Radar */}
-                <RivalRadar battle={battle} />
+                {/* Opponent Display - RivalRadar for PVP, MonsterCard for Adventure */}
+                {isAdventureMode ? (
+                    <MonsterCard adventure={adventure} />
+                ) : (
+                    <RivalRadar battle={battle} />
+                )}
 
                 {/* Active Tasks (Hide if Pre-Battle or Pending) */}
                 {!isPreBattle && !isPending && (
@@ -297,25 +348,36 @@ export default function Dashboard() {
                         ⚠️ FINAL DAY - NO PLANNING REQUIRED
                     </div>
                 )}
+
+                {/* Break Day Button (Adventure only) */}
+                {isAdventureMode && adventure && adventure.break_days_used < 2 && (
+                    <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleScheduleBreak}
+                        className="w-full max-w-3xl btn-neo bg-yellow-300 text-black py-4 text-lg font-black uppercase tracking-wide flex items-center justify-center gap-2"
+                    >
+                        <Coffee className="w-5 h-5" />
+                        Schedule Break ({2 - adventure.break_days_used} remaining)
+                    </motion.button>
+                )}
             </div>
 
-            {/* Danger Zone: Surrender */}
-            {
-                !isPending && (
-                    <div className="w-full max-w-3xl mt-8 mb-12 flex justify-center">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleForfeit}
-                            className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white font-bold border-3 border-black shadow-neo hover:bg-red-600 transition-colors"
-                            title="Surrender Battle"
-                        >
-                            <Flag className="w-5 h-5 fill-white" />
-                            SURRENDER
-                        </motion.button>
-                    </div>
-                )
-            }
+            {/* Danger Zone: Surrender/Retreat */}
+            {!isPending && (
+                <div className="w-full max-w-3xl mt-8 mb-12 flex justify-center">
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={isAdventureMode ? handleRetreat : handleForfeit}
+                        className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white font-bold border-3 border-black shadow-neo hover:bg-red-600 transition-colors"
+                        title={isAdventureMode ? "Retreat from Adventure" : "Surrender Battle"}
+                    >
+                        <Flag className="w-5 h-5 fill-white" />
+                        {isAdventureMode ? 'RETREAT' : 'SURRENDER'}
+                    </motion.button>
+                </div>
+            )}
         </main >
     );
 }

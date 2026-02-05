@@ -3,12 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Swords, Shield, Trophy, Star, Target, Mail, Loader, Users, User } from 'lucide-react';
+import { Search, Swords, Shield, Trophy, Star, Target, Mail, Loader, Users, User, Compass } from 'lucide-react';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
 import StatBox from '../components/StatBox';
 import TabButton from '../components/TabButton';
 import UserListItem from '../components/UserListItem';
+import MonsterSelect from '../components/MonsterSelect';
 import { useProfile } from '../hooks/useProfile';
 import { useBattleInvites } from '../hooks/useBattleInvites';
 import { useFollowing } from '../hooks/useFollowing';
@@ -16,6 +17,8 @@ import { useFollowers } from '../hooks/useFollowers';
 import { useUserSearch } from '../hooks/useUserSearch';
 import { useSocialMutations } from '../hooks/useSocialMutations';
 import { useBattleMutations } from '../hooks/useBattleMutations';
+import { useMonsters } from '../hooks/useMonsters';
+import { useAdventureMutations } from '../hooks/useAdventureMutations';
 
 export default function UserDashboard() {
     const { session } = useAuth();
@@ -28,6 +31,12 @@ export default function UserDashboard() {
     const { data: followers = [] } = useFollowers();
     const { followMutation, unfollowMutation } = useSocialMutations();
     const { acceptInviteMutation, rejectInviteMutation } = useBattleMutations();
+
+    // Adventure hooks
+    const [showMonsterSelect, setShowMonsterSelect] = useState(false);
+    const { data: monsterPool } = useMonsters();
+    const { startAdventureMutation, refreshMonstersMutation } = useAdventureMutations();
+    const { refetch: refetchProfile } = useProfile();
 
     // Social State
     const [searchQuery, setSearchQuery] = useState('');
@@ -96,7 +105,7 @@ export default function UserDashboard() {
             }
 
             // Step 2: Send invite using rival_id
-            await axios.post('/api/invites/send', {
+            await axios.post('/invites/send', {
                 rival_id: rivalUser.id,
                 start_date: startDate,
                 duration: duration
@@ -133,6 +142,30 @@ export default function UserDashboard() {
             await rejectInviteMutation.mutateAsync(battleId);
         } catch (error) {
             console.error("Failed to reject", error);
+        }
+    };
+
+    const handleStartAdventure = async (monsterId: string) => {
+        try {
+            await startAdventureMutation.mutateAsync(monsterId);
+            toast.success("Adventure started! Good luck!");
+            setShowMonsterSelect(false);
+            // Refetch profile to get current_adventure, then navigate
+            await refetchProfile();
+            navigate('/dashboard');
+        } catch (error: any) {
+            console.error("Failed to start adventure", error);
+            toast.error(error.response?.data?.detail || "Failed to start adventure");
+        }
+    };
+
+    const handleRefreshMonsters = async () => {
+        try {
+            await refreshMonstersMutation.mutateAsync();
+            // Don't refetch - mutation onSuccess already updates the cache
+        } catch (error: any) {
+            console.error("Failed to refresh monsters", error);
+            toast.error(error.response?.data?.detail || "No refreshes remaining");
         }
     };
 
@@ -228,6 +261,31 @@ export default function UserDashboard() {
 
                 {/* RIGHT COLUMN: Battle Station & Social Hub */}
                 <div className="md:col-span-8 space-y-8">
+
+                    {/* ADVENTURE STATION */}
+                    <div className="bg-neo-white border-4 border-black shadow-neo p-6">
+                        <div className="bg-purple-400 border-3 border-black p-4 mb-6 -mt-10 mx-auto w-max shadow-neo-sm transform rotate-1">
+                            <h2 className="text-xl font-black uppercase flex items-center gap-2">
+                                <Compass className="w-6 h-6" /> Adventure Station
+                            </h2>
+                        </div>
+
+                        <div className="text-center">
+                            <p className="font-bold text-gray-600 mb-4">
+                                Battle AI monsters solo. Complete tasks to deal damage!
+                            </p>
+
+                            <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => setShowMonsterSelect(true)}
+                                className="w-full py-4 font-black border-3 border-black shadow-neo bg-purple-400 hover:bg-purple-500 flex items-center justify-center gap-2 transition-all active:translate-y-1 active:shadow-none"
+                            >
+                                <Compass className="w-5 h-5" />
+                                START ADVENTURE
+                            </motion.button>
+                        </div>
+                    </div>
 
                     {/* BATTLE STATION (Challenge) */}
                     <div className="bg-neo-white border-4 border-black shadow-neo p-6">
@@ -402,6 +460,41 @@ export default function UserDashboard() {
                     </div>
                 </div>
             </div>
+
+            {/* Monster Select Modal */}
+            {showMonsterSelect && monsterPool && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-neo-white border-4 border-black shadow-neo max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="bg-purple-400 p-4 border-b-4 border-black flex justify-between items-center">
+                            <h2 className="text-xl font-black uppercase">Choose Your Monster</h2>
+                            <button
+                                onClick={() => setShowMonsterSelect(false)}
+                                className="w-8 h-8 bg-white border-2 border-black font-black hover:bg-gray-100"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <div className="text-sm font-bold text-gray-500">
+                                    Rating: {monsterPool.current_rating} |
+                                    Unlocked: {monsterPool.unlocked_tiers.join(', ')}
+                                </div>
+                            </div>
+
+                            <MonsterSelect
+                                monsters={monsterPool.monsters}
+                                refreshesRemaining={monsterPool.refreshes_remaining}
+                                onSelect={handleStartAdventure}
+                                onRefresh={handleRefreshMonsters}
+                                isLoading={startAdventureMutation.isPending}
+                                isRefreshing={refreshMonstersMutation.isPending}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

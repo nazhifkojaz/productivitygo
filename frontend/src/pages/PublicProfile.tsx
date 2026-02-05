@@ -46,7 +46,7 @@ export default function PublicProfile() {
 
         setSendingInvite(true);
         try {
-            await axios.post('/api/invites/send', {
+            await axios.post('/invites/send', {
                 rival_id: profile.id,
                 start_date: startDate,
                 duration: duration

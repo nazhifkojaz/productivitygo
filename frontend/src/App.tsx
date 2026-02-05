@@ -8,6 +8,8 @@ import axios from 'axios';
 import PlanTasks from './pages/PlanTasks';
 import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
+import BattleResult from './pages/BattleResult';
+import AdventureResult from './pages/AdventureResult';
 import { OpenAPI } from './api';
 import { Toaster } from 'sonner';
 import { useProfile } from './hooks/useProfile';
@@ -35,64 +37,93 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Battle Router Wrapper
+// Game Session Router - handles both battles and adventures
+type GameSessionState = 'loading' | 'lobby' | 'battle_active' | 'battle_completed' | 'adventure_active' | 'adventure_completed';
+
 const BattleRouter = () => {
   const { session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const [battleState, setBattleState] = useState<'loading' | 'lobby' | 'active' | 'completed'>('loading');
-  const [battleId, setBattleId] = useState<string | null>(null);
+  const [gameState, setGameState] = useState<GameSessionState>('loading');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkBattle = async () => {
+    const checkGameSession = async () => {
       if (!profile || profileLoading) return;
 
       try {
         const currentBattleId = profile.current_battle;
+        const currentAdventureId = profile.current_adventure;
 
-        if (!currentBattleId) {
-          setBattleState('lobby');
+        // No active session
+        if (!currentBattleId && !currentAdventureId) {
+          setGameState('lobby');
           setLoading(false);
           return;
         }
 
-        // Fetch the battle to check its status
-        const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
-          headers: { Authorization: `Bearer ${session?.access_token}` }
-        });
+        // Check adventure first (if exists) - adventures take priority
+        if (currentAdventureId) {
+          const adventureResponse = await axios.get(`/api/adventures/${currentAdventureId}`, {
+            headers: { Authorization: `Bearer ${session?.access_token}` }
+          });
 
-        setBattleId(currentBattleId);
+          setSessionId(currentAdventureId);
 
-        if (battleResponse.data.status === 'completed') {
-          setBattleState('completed');
-        } else {
-          setBattleState('active');
+          if (['completed', 'escaped', 'abandoned'].includes(adventureResponse.data.status)) {
+            setGameState('adventure_completed');
+          } else {
+            setGameState('adventure_active');
+          }
+          setLoading(false);
+          return;
+        }
+
+        // Check battle
+        if (currentBattleId) {
+          const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
+            headers: { Authorization: `Bearer ${session?.access_token}` }
+          });
+
+          setSessionId(currentBattleId);
+
+          if (battleResponse.data.status === 'completed') {
+            setGameState('battle_completed');
+          } else {
+            setGameState('battle_active');
+          }
         }
       } catch (error) {
-        console.error('Failed to check battle state:', error);
-        setBattleState('lobby');
+        console.error('Failed to check game state:', error);
+        setGameState('lobby');
       } finally {
         setLoading(false);
       }
     };
 
-    checkBattle();
+    checkGameSession();
   }, [session, profile, profileLoading]);
 
   if (loading) return <div className="h-screen flex items-center justify-center font-black text-2xl">SYNCING...</div>;
 
-  if (battleState === 'completed' && battleId) {
-    return <Navigate to={`/battle-result/${battleId}`} replace />;
+  // Completed states -> redirect to result pages
+  if (gameState === 'battle_completed' && sessionId) {
+    return <Navigate to={`/battle-result/${sessionId}`} replace />;
   }
 
-  if (battleState === 'active') {
+  if (gameState === 'adventure_completed' && sessionId) {
+    return <Navigate to={`/adventure-result/${sessionId}`} replace />;
+  }
+
+  // Active states -> show dashboard
+  if (gameState === 'battle_active' || gameState === 'adventure_active') {
     return <Dashboard />;
   }
 
+  // Lobby state
   return <UserDashboard />;
 };
 
-import BattleResult from './pages/BattleResult';
 // import EditProfile from './pages/EditProfile';
 
 function App() {
@@ -106,6 +137,7 @@ function App() {
           <Route path="/dashboard" element={<ProtectedRoute><BattleRouter /></ProtectedRoute>} />
           <Route path="/plan" element={<ProtectedRoute><PlanTasks /></ProtectedRoute>} />
           <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
+          <Route path="/adventure-result/:adventureId" element={<ProtectedRoute><AdventureResult /></ProtectedRoute>} />
           <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>

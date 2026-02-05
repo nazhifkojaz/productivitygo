@@ -8,7 +8,7 @@ import { OpenAPI } from './api'
 import axios from 'axios'
 
 // Initialize API Configuration
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL = import.meta.env.VITE_API_URL || "";
 OpenAPI.BASE = API_URL;
 axios.defaults.baseURL = API_URL;
 
