@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from database import supabase
-from routers import tasks, battles, users, social, invites
+from routers import tasks, battles, users, social, invites, adventures
 from scheduler import start_scheduler, shutdown_scheduler
 import os
 
@@ -56,6 +56,7 @@ app.include_router(battles.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(invites.router, prefix="/api")
+app.include_router(adventures.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():

@@ -63,3 +63,34 @@ TASKS_FULL = "id, daily_entry_id, content, is_optional, assigned_score, is_compl
 
 # For match history display
 BATTLE_MATCH_HISTORY = "id, user1_id, user2_id, winner_id, end_date, duration, status"
+
+# =============================================================================
+# Adventure Table Columns
+# =============================================================================
+
+# For checking if an adventure exists and its status
+ADVENTURE_STATUS_ONLY = "id, status"
+
+# For basic adventure information
+ADVENTURE_BASIC = "id, status, user_id, monster_id, start_date, deadline, duration"
+
+# For full adventure data
+ADVENTURE_FULL = """
+    id, user_id, monster_id, duration, start_date, deadline,
+    monster_max_hp, monster_current_hp, status, current_round,
+    total_damage_dealt, xp_earned, break_days_used, max_break_days,
+    is_on_break, break_end_date, created_at, completed_at
+"""
+
+# For adventure with embedded monster data
+ADVENTURE_WITH_MONSTER = "*, monster:monsters(id, name, emoji, tier, base_hp, description)"
+
+# =============================================================================
+# Monster Table Columns
+# =============================================================================
+
+# For basic monster display
+MONSTER_BASIC = "id, name, emoji, tier, base_hp"
+
+# For full monster data
+MONSTER_FULL = "id, name, emoji, tier, base_hp, description"
