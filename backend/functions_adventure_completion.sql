@@ -123,7 +123,6 @@ BEGIN
     -- Update user profile stats
     UPDATE profiles SET
         adventure_count = adventure_count + 1,
-        adventure_win_count = adventure_win_count + CASE WHEN v_is_victory THEN 1 ELSE 0 END,
         monster_defeats = monster_defeats + CASE WHEN v_is_victory THEN 1 ELSE 0 END,
         monster_escapes = monster_escapes + CASE WHEN NOT v_is_victory THEN 1 ELSE 0 END,
         monster_rating = GREATEST(monster_rating + CASE WHEN v_is_victory THEN 1 ELSE -1 END, 0),
@@ -132,6 +131,17 @@ BEGIN
         current_adventure = NULL,
         highest_tier_reached = v_new_highest
     WHERE id = v_user_id;
+
+    -- Clean up orphaned daily_entries for this adventure
+    -- Must delete tasks first due to foreign key constraint
+    -- Then delete the daily_entries themselves
+    DELETE FROM tasks
+    WHERE daily_entry_id IN (
+        SELECT id FROM daily_entries WHERE adventure_id = v_adv_id
+    );
+
+    DELETE FROM daily_entries
+    WHERE adventure_id = v_adv_id;
 
     RETURN QUERY SELECT
         CASE WHEN v_is_victory THEN 'completed' ELSE 'escaped' END::TEXT,
@@ -244,6 +254,17 @@ BEGIN
         total_damage_dealt = COALESCE(total_damage_dealt, 0) + v_total_damage,
         current_adventure = NULL
     WHERE id = abandoning_user;
+
+    -- Clean up orphaned daily_entries for this adventure
+    -- Must delete tasks first due to foreign key constraint
+    -- Then delete the daily_entries themselves
+    DELETE FROM tasks
+    WHERE daily_entry_id IN (
+        SELECT id FROM daily_entries WHERE adventure_id = v_adv_id
+    );
+
+    DELETE FROM daily_entries
+    WHERE adventure_id = v_adv_id;
 
     RETURN QUERY SELECT 'escaped'::TEXT, v_final_xp;
 

@@ -184,9 +184,8 @@ BEGIN
     -- Increment battle_count for both
     UPDATE profiles SET battle_count = battle_count + 1 WHERE id IN (v_user1_id, v_user2_id);
 
-    -- Update level (every 1000 XP = 1 level)
-    UPDATE profiles SET level = FLOOR(total_xp_earned / 1000) + 1 WHERE id = v_user1_id;
-    UPDATE profiles SET level = FLOOR(total_xp_earned / 1000) + 1 WHERE id = v_user2_id;
+    -- Note: level is now a generated column (FLOOR(total_xp_earned / 1000) + 1)
+    -- It updates automatically when total_xp_earned changes
 
     -- Mark battle complete WITH timestamp for idempotency
     UPDATE battles
@@ -194,6 +193,17 @@ BEGIN
         winner_id = v_winner_id,
         completed_at = NOW()
     WHERE id = battle_uuid;
+
+    -- Clean up daily_entries for this battle
+    -- Must delete tasks first due to foreign key constraint
+    -- Then delete the daily_entries themselves
+    DELETE FROM tasks
+    WHERE daily_entry_id IN (
+        SELECT id FROM daily_entries WHERE battle_id = battle_uuid
+    );
+
+    DELETE FROM daily_entries
+    WHERE battle_id = battle_uuid;
 
     -- Return already_completed = FALSE to signal this was a fresh completion
     RETURN QUERY SELECT v_winner_id, v_user1_total_xp, v_user2_total_xp, FALSE::BOOLEAN;
