@@ -99,15 +99,22 @@ create policy "Users can manage their own daily entries."
   using ( auth.uid() = user_id );
 
 -- TASKS
--- Users can see tasks for battles they are in
-create policy "Users can view tasks for their battles."
+-- Users can see their tasks (both battle and adventure tasks) - item 9.1
+create policy "Users can view their tasks"
   on tasks for select
   using (
     exists (
-      select 1 from daily_entries
-      join battles on battles.id = daily_entries.battle_id
-      where daily_entries.id = tasks.daily_entry_id
-      and (battles.user1_id = auth.uid() or battles.user2_id = auth.uid())
+      select 1 from daily_entries de
+      where de.id = tasks.daily_entry_id
+      and (
+        -- Battle tasks: user is in the battle
+        exists (select 1 from battles b
+                where b.id = de.battle_id
+                and (b.user1_id = auth.uid() or b.user2_id = auth.uid()))
+        or
+        -- Adventure tasks: user owns the entry
+        (de.adventure_id is not null and de.user_id = auth.uid())
+      )
     )
   );
 
