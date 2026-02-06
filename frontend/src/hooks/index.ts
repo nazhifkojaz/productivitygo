@@ -8,6 +8,7 @@
 // Profile hooks
 export { useProfile } from './useProfile';
 export { useProfileForm } from './useProfileForm';
+export { useProfileMutations } from './useProfileMutations';
 export { usePublicProfile } from './usePublicProfile';
 
 // Battle hooks

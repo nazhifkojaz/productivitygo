@@ -1,29 +1,27 @@
-import { useState, useCallback } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
-import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
+import { useProfile } from './useProfile';
+import { useProfileMutations } from './useProfileMutations';
 import type { ProfileData } from '../types';
 
 interface UseProfileFormReturn {
-    // Data
+    // Data (from useProfile)
     profile: ProfileData | null;
     isLoading: boolean;
-    error: Error | null;
+    error: unknown;
 
-    // Edit state (local UI state not managed by React Query)
-    isEditing: boolean;
+    // Form state (local only)
     username: string;
     selectedEmoji: string;
+    isEditing: boolean;
     showEmojiPicker: boolean;
 
     // Setters
-    setIsEditing: (value: boolean) => void;
     setUsername: (value: string) => void;
+    setSelectedEmoji: (value: string) => void;
+    setIsEditing: (value: boolean) => void;
     setShowEmojiPicker: (value: boolean) => void;
 
-    // Mutations
+    // Mutations (from useProfileMutations)
     updateProfile: () => Promise<void>;
     updateAvatar: (emoji: string) => Promise<void>;
     updateTimezone: (timezone: string) => Promise<void>;
@@ -33,133 +31,71 @@ interface UseProfileFormReturn {
     refetch: () => void;
 }
 
+/**
+ * Profile form hook that combines data fetching, mutations, and UI state.
+ * Refactored to use useProfile for data fetching and useProfileMutations for mutations.
+ * This hook now only manages UI state (editing mode, emoji picker, form values).
+ */
 export function useProfileForm(): UseProfileFormReturn {
-    const { session } = useAuth();
-    const queryClient = useQueryClient();
+    // Use existing hooks for data fetching and mutations
+    const { data: profile, isLoading, error, refetch } = useProfile();
+    const {
+        updateProfileMutation,
+        updateAvatarMutation,
+        updateTimezoneMutation,
+        updatePasswordMutation,
+    } = useProfileMutations();
 
-    // Local UI state (not managed by React Query)
+    // Local UI state
     const [isEditing, setIsEditing] = useState(false);
-    const [username, setUsername] = useState('');
-    const [selectedEmoji, setSelectedEmoji] = useState('😀');
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-    // Fetch profile data
-    const {
-        data: profile,
-        isLoading,
-        error,
-        refetch,
-    } = useQuery({
-        queryKey: ['profile'],
-        queryFn: async (): Promise<ProfileData> => {
-            const { data } = await axios.get('/api/users/profile', {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
-            // Sync local state with fetched data
-            setUsername(data.username || '');
-            setSelectedEmoji(data.avatar_emoji || '😀');
-            return data;
-        },
-        enabled: !!session?.access_token,
-    });
+    // Form state - sync with profile data when it changes
+    const [username, setUsername] = useState('');
+    const [selectedEmoji, setSelectedEmoji] = useState('😀');
 
-    // Update profile mutation (username + avatar_emoji)
-    const updateProfileMutation = useMutation({
-        mutationFn: async (data: { username?: string; avatar_emoji?: string }) => {
-            return axios.put('/api/users/profile', data, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
-        },
-        onSuccess: () => {
-            // Invalidate profile query to refetch updated data
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
-            setIsEditing(false);
-            toast.success('Profile updated successfully!');
-        },
-        onError: () => {
-            toast.error('Failed to update profile');
-        },
-    });
+    // Sync form state when profile data changes
+    useEffect(() => {
+        if (profile) {
+            setUsername(profile.username || '');
+            setSelectedEmoji(profile.avatar_emoji || '😀');
+        }
+    }, [profile]);
 
-    // Update avatar only (immediate save)
-    const updateAvatarMutation = useMutation({
-        mutationFn: async (emoji: string) => {
-            return axios.put('/api/users/profile', { avatar_emoji: emoji }, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
-            setShowEmojiPicker(false);
-            toast.success('Avatar updated!');
-        },
-        onError: () => {
-            toast.error('Failed to update avatar');
-        },
-    });
-
-    // Update timezone mutation
-    const updateTimezoneMutation = useMutation({
-        mutationFn: async (timezone: string) => {
-            return axios.put('/api/users/profile', { timezone }, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
-        },
-        onSuccess: (_, timezone) => {
-            queryClient.invalidateQueries({ queryKey: ['profile'] });
-            toast.success(`Timezone updated to ${timezone}`);
-        },
-        onError: () => {
-            toast.error('Failed to update timezone');
-        },
-    });
-
-    // Update password mutation (uses Supabase directly)
-    const updatePasswordMutation = useMutation({
-        mutationFn: async (password: string) => {
-            const { error } = await supabase.auth.updateUser({ password });
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            toast.success('Password updated successfully!');
-        },
-        onError: (error: any) => {
-            toast.error(error.message);
-            throw error;
-        },
-    });
-
-    // Wrapped mutation functions
-    const updateProfile = useCallback(async () => {
+    // Wrapped mutation functions with UI state management
+    const updateProfile = async () => {
         await updateProfileMutation.mutateAsync({
             username,
             avatar_emoji: selectedEmoji,
         });
-    }, [username, selectedEmoji, updateProfileMutation]);
+        setIsEditing(false);
+    };
 
-    const updateAvatar = useCallback(async (emoji: string) => {
+    const updateAvatar = async (emoji: string) => {
         setSelectedEmoji(emoji);
         await updateAvatarMutation.mutateAsync(emoji);
-    }, [updateAvatarMutation]);
+        setShowEmojiPicker(false);
+    };
 
-    const updateTimezone = useCallback(async (timezone: string) => {
+    const updateTimezone = async (timezone: string) => {
         await updateTimezoneMutation.mutateAsync(timezone);
-    }, [updateTimezoneMutation]);
+    };
 
-    const updatePassword = useCallback(async (password: string) => {
+    const updatePassword = async (password: string) => {
         await updatePasswordMutation.mutateAsync(password);
-    }, [updatePasswordMutation]);
+    };
 
     return {
         profile: profile || null,
         isLoading,
         error,
-        isEditing,
         username,
         selectedEmoji,
+        isEditing,
         showEmojiPicker,
-        setIsEditing,
         setUsername,
+        setSelectedEmoji,
+        setIsEditing,
         setShowEmojiPicker,
         updateProfile,
         updateAvatar,
