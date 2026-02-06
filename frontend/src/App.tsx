@@ -38,7 +38,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Game Session Router - handles both battles and adventures
-type GameSessionState = 'loading' | 'lobby' | 'battle_active' | 'battle_completed' | 'adventure_active' | 'adventure_completed';
+type GameSessionState = 'loading' | 'idle' | 'in_battle' | 'battle_completed' | 'in_adventure' | 'adventure_completed';
 
 const GameRouter = () => {
   const { session } = useAuth();
@@ -57,7 +57,7 @@ const GameRouter = () => {
 
         // No active session
         if (!currentBattleId && !currentAdventureId) {
-          setGameState('lobby');
+          setGameState('idle');
           setLoading(false);
           return;
         }
@@ -73,7 +73,7 @@ const GameRouter = () => {
           if (['completed', 'escaped', 'abandoned'].includes(adventureResponse.data.status)) {
             setGameState('adventure_completed');
           } else {
-            setGameState('adventure_active');
+            setGameState('in_adventure');
           }
           setLoading(false);
           return;
@@ -90,12 +90,12 @@ const GameRouter = () => {
           if (battleResponse.data.status === 'completed') {
             setGameState('battle_completed');
           } else {
-            setGameState('battle_active');
+            setGameState('in_battle');
           }
         }
       } catch (error) {
         console.error('Failed to check game state:', error);
-        setGameState('lobby');
+        setGameState('idle');
       } finally {
         setLoading(false);
       }
@@ -116,7 +116,7 @@ const GameRouter = () => {
   }
 
   // Active states -> show arena
-  if (gameState === 'battle_active' || gameState === 'adventure_active') {
+  if (gameState === 'in_battle' || gameState === 'in_adventure') {
     return <Arena />;
   }
 
