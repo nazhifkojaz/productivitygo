@@ -43,8 +43,8 @@ CREATE INDEX IF NOT EXISTS idx_battles_user2 ON battles(user2_id);
 -- Index on status for filtering battles by status (pending, active, completed)
 CREATE INDEX IF NOT EXISTS idx_battles_status ON battles(status);
 
--- Index on battle_date for sorting and filtering battles by date
-CREATE INDEX IF NOT EXISTS idx_battles_date ON battles(battle_date);
+-- Index on start_date for sorting and filtering battles by date
+CREATE INDEX IF NOT EXISTS idx_battles_start_date ON battles(start_date);
 
 -- Index on end_date for completed battles queries
 CREATE INDEX IF NOT EXISTS idx_battles_end_date ON battles(end_date);
