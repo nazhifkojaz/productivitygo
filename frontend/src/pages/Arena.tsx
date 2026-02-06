@@ -181,7 +181,9 @@ export default function Dashboard() {
                     <h1 className="text-2xl font-black italic uppercase">Battle <span className="text-neo-primary">Dashboard</span></h1>
                     <div className="text-xs font-bold text-gray-500">
                         {isAdventureMode
-                            ? `DAY ${adventure?.current_round || 1} • ${adventure?.days_remaining || 0} DAYS LEFT`
+                            ? (isPreBattle
+                                ? 'PREPARING FOR ADVENTURE'
+                                : `DAY ${adventure?.current_round || 1} • ${adventure?.days_remaining || 0} DAYS LEFT`)
                             : isPreBattle
                                 ? 'PREPARING FOR BATTLE'
                                 : isPending
@@ -209,13 +211,17 @@ export default function Dashboard() {
             {isPreBattle && (
                 <div className="w-full max-w-3xl bg-yellow-300 border-3 border-black p-6 shadow-neo mb-8 text-center">
                     <h2 className="text-2xl font-black uppercase mb-2 flex items-center justify-center gap-2">
-                        <AlertTriangle className="w-8 h-8" /> Battle Pending
+                        <AlertTriangle className="w-8 h-8" /> {isAdventureMode ? 'Adventure Pending' : 'Battle Pending'}
                     </h2>
-                    <p className="font-bold mb-1">The battle begins in</p>
+                    <p className="font-bold mb-1">
+                        {isAdventureMode ? 'The hunt begins in' : 'The battle begins in'}
+                    </p>
                     <div className="text-3xl font-black text-neo-primary mb-2">
                         {timeUntilBattle || 'Loading...'}
                     </div>
-                    <p className="font-bold text-sm">Prepare your protocols.</p>
+                    <p className="font-bold text-sm">
+                        {isAdventureMode ? 'Plan your first day of tasks.' : 'Prepare your protocols.'}
+                    </p>
                 </div>
             )}
 
@@ -317,8 +323,8 @@ export default function Dashboard() {
                     </div>
                 )}
 
-                {/* Break Day Button (Adventure only) */}
-                {isAdventureMode && adventure && adventure.break_days_used < 2 && (
+                {/* Break Day Button (Adventure only, hide during PRE_ADVENTURE) */}
+                {isAdventureMode && adventure && !isPreBattle && adventure.break_days_used < 2 && (
                     <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
