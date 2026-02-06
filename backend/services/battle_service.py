@@ -277,18 +277,20 @@ class BattleService:
 
         opponent_id = old_battle['user2_id'] if old_battle['user1_id'] == user_id else old_battle['user1_id']
 
-        # 2. Check if pending rematch already exists
-        all_pending = supabase.table("battles").select(BATTLE_PENDING_CHECK).eq("status", "pending").execute()
+        # 2. Check if pending rematch already exists (server-side filtering - item 6.1)
         user1_id = old_battle['user1_id']
         user2_id = old_battle['user2_id']
-        
-        existing_pending = [p for p in all_pending.data 
-                            if (p['user1_id'] == user1_id and p['user2_id'] == user2_id) 
-                            or (p['user1_id'] == user2_id and p['user2_id'] == user1_id)]
-        
-        if existing_pending:
+
+        # Use OR clause for server-side filtering instead of loading all pending battles
+        existing_pending = supabase.table("battles").select(BATTLE_PENDING_CHECK)\
+            .eq("status", "pending")\
+            .or_(f"and(user1_id.eq.{user1_id},user2_id.eq.{user2_id}),and(user1_id.eq.{user2_id},user2_id.eq.{user1_id})")\
+            .limit(1)\
+            .execute()
+
+        if existing_pending.data:
             # Rematch already requested, just return it
-            return {"status": "rematch_already_exists", "battle": existing_pending[0]}
+            return {"status": "rematch_already_exists", "battle": existing_pending.data[0]}
         
         # 3. Create new battle (Pending)
         today = date.today()

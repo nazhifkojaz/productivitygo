@@ -24,7 +24,7 @@ create table battles (
   user2_id uuid references profiles(id) not null,
   start_date date not null, -- Monday
   end_date date not null,   -- Sunday
-  status text default 'active' check (status in ('active', 'completed', 'disputed')),
+  status text default 'pending' check (status in ('pending', 'active', 'completed')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

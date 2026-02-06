@@ -50,16 +50,21 @@ def process_battle_rounds(battle: dict) -> int:
     start_date = date.fromisoformat(battle['start_date'])
     duration = battle.get('duration', 5)
     current_round = battle.get('current_round', 0)
-    
-    # Fetch both players' timezones
+
+    # Fetch both players' timezones in a single query (item 6.2 - fix N+1 query)
     user1_id = battle['user1_id']
     user2_id = battle['user2_id']
-    
-    user1_profile = supabase.table("profiles").select("timezone").eq("id", user1_id).single().execute()
-    user2_profile = supabase.table("profiles").select("timezone").eq("id", user2_id).single().execute()
-    
-    tz1 = user1_profile.data['timezone'] if user1_profile.data else "UTC"
-    tz2 = user2_profile.data['timezone'] if user2_profile.data else "UTC"
+
+    profiles = supabase.table("profiles").select("id, timezone").in_("id", [user1_id, user2_id]).execute()
+
+    # Extract timezones from batch result
+    tz1 = "UTC"
+    tz2 = "UTC"
+    for profile in profiles.data:
+        if profile['id'] == user1_id:
+            tz1 = profile.get('timezone', 'UTC')
+        elif profile['id'] == user2_id:
+            tz2 = profile.get('timezone', 'UTC')
     
     # Get local dates for both players
     date1 = get_local_date(tz1)

@@ -81,15 +81,8 @@ BEGIN
     -- Determine outcome
     v_is_victory := v_current_hp <= 0;
 
-    -- Calculate tier multiplier
-    v_multiplier := CASE v_tier
-        WHEN 'easy' THEN 1.0
-        WHEN 'medium' THEN 1.2
-        WHEN 'hard' THEN 1.5
-        WHEN 'expert' THEN 2.0
-        WHEN 'boss' THEN 3.0
-        ELSE 1.0
-    END;
+    -- Calculate tier multiplier (using helper function - item 7.1)
+    v_multiplier := get_tier_multiplier(v_tier);
 
     -- Calculate XP
     v_final_xp := (v_total_damage * v_multiplier *
@@ -133,13 +126,7 @@ BEGIN
     WHERE id = v_user_id;
 
     -- Clean up orphaned daily_entries for this adventure
-    -- Must delete tasks first due to foreign key constraint
-    -- Then delete the daily_entries themselves
-    DELETE FROM tasks
-    WHERE daily_entry_id IN (
-        SELECT id FROM daily_entries WHERE adventure_id = v_adv_id
-    );
-
+    -- Tasks are auto-deleted via CASCADE (item 7.2, 8.3)
     DELETE FROM daily_entries
     WHERE adventure_id = v_adv_id;
 
@@ -225,15 +212,8 @@ BEGIN
         RAISE EXCEPTION 'Adventure is not active (current status: %)', v_adv_status;
     END IF;
 
-    -- Calculate tier multiplier
-    v_multiplier := CASE v_tier
-        WHEN 'easy' THEN 1.0
-        WHEN 'medium' THEN 1.2
-        WHEN 'hard' THEN 1.5
-        WHEN 'expert' THEN 2.0
-        WHEN 'boss' THEN 3.0
-        ELSE 1.0
-    END;
+    -- Calculate tier multiplier (using helper function - item 7.1)
+    v_multiplier := get_tier_multiplier(v_tier);
 
     -- Calculate 50% XP
     v_final_xp := (v_total_damage * v_multiplier * 0.5)::INT;
@@ -256,13 +236,7 @@ BEGIN
     WHERE id = abandoning_user;
 
     -- Clean up orphaned daily_entries for this adventure
-    -- Must delete tasks first due to foreign key constraint
-    -- Then delete the daily_entries themselves
-    DELETE FROM tasks
-    WHERE daily_entry_id IN (
-        SELECT id FROM daily_entries WHERE adventure_id = v_adv_id
-    );
-
+    -- Tasks are auto-deleted via CASCADE (item 7.2, 8.3)
     DELETE FROM daily_entries
     WHERE adventure_id = v_adv_id;
 

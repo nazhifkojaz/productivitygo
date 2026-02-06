@@ -195,13 +195,7 @@ BEGIN
     WHERE id = battle_uuid;
 
     -- Clean up daily_entries for this battle
-    -- Must delete tasks first due to foreign key constraint
-    -- Then delete the daily_entries themselves
-    DELETE FROM tasks
-    WHERE daily_entry_id IN (
-        SELECT id FROM daily_entries WHERE battle_id = battle_uuid
-    );
-
+    -- Tasks are auto-deleted via CASCADE (item 7.2, 8.3)
     DELETE FROM daily_entries
     WHERE battle_id = battle_uuid;
 
