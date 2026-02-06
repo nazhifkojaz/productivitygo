@@ -6,7 +6,7 @@ export function useCurrentBattle() {
     const { session } = useAuth();
 
     return useQuery({
-        queryKey: ['battle', 'current'],
+        queryKey: ['battles', 'current'],
         queryFn: async () => {
             const { data } = await axios.get('/api/battles/current', {
                 headers: { Authorization: `Bearer ${session?.access_token}` }

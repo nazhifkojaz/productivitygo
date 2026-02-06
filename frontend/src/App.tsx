@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import UserDashboard from './pages/UserDashboard';
+import Arena from './pages/Arena';
+import Lobby from './pages/Lobby';
 import axios from 'axios';
 import PlanTasks from './pages/PlanTasks';
 import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
+import BattleResult from './pages/BattleResult';
+import AdventureResult from './pages/AdventureResult';
 import { OpenAPI } from './api';
 import { Toaster } from 'sonner';
 import { useProfile } from './hooks/useProfile';
@@ -35,65 +37,92 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Battle Router Wrapper
-const BattleRouter = () => {
+// Game Session Router - handles both battles and adventures
+type GameSessionState = 'loading' | 'idle' | 'in_battle' | 'battle_completed' | 'in_adventure' | 'adventure_completed';
+
+const GameRouter = () => {
   const { session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const [battleState, setBattleState] = useState<'loading' | 'lobby' | 'active' | 'completed'>('loading');
-  const [battleId, setBattleId] = useState<string | null>(null);
+  const [gameState, setGameState] = useState<GameSessionState>('loading');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkBattle = async () => {
+    const checkGameSession = async () => {
       if (!profile || profileLoading) return;
 
       try {
         const currentBattleId = profile.current_battle;
+        const currentAdventureId = profile.current_adventure;
 
-        if (!currentBattleId) {
-          setBattleState('lobby');
+        // No active session
+        if (!currentBattleId && !currentAdventureId) {
+          setGameState('idle');
           setLoading(false);
           return;
         }
 
-        // Fetch the battle to check its status
-        const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
-          headers: { Authorization: `Bearer ${session?.access_token}` }
-        });
+        // Check adventure first (if exists) - adventures take priority
+        if (currentAdventureId) {
+          const adventureResponse = await axios.get(`/api/adventures/${currentAdventureId}`, {
+            headers: { Authorization: `Bearer ${session?.access_token}` }
+          });
 
-        setBattleId(currentBattleId);
+          setSessionId(currentAdventureId);
 
-        if (battleResponse.data.status === 'completed') {
-          setBattleState('completed');
-        } else {
-          setBattleState('active');
+          if (['completed', 'escaped', 'abandoned'].includes(adventureResponse.data.status)) {
+            setGameState('adventure_completed');
+          } else {
+            setGameState('in_adventure');
+          }
+          setLoading(false);
+          return;
+        }
+
+        // Check battle
+        if (currentBattleId) {
+          const battleResponse = await axios.get(`/api/battles/${currentBattleId}`, {
+            headers: { Authorization: `Bearer ${session?.access_token}` }
+          });
+
+          setSessionId(currentBattleId);
+
+          if (battleResponse.data.status === 'completed') {
+            setGameState('battle_completed');
+          } else {
+            setGameState('in_battle');
+          }
         }
       } catch (error) {
-        console.error('Failed to check battle state:', error);
-        setBattleState('lobby');
+        console.error('Failed to check game state:', error);
+        setGameState('idle');
       } finally {
         setLoading(false);
       }
     };
 
-    checkBattle();
+    checkGameSession();
   }, [session, profile, profileLoading]);
 
   if (loading) return <div className="h-screen flex items-center justify-center font-black text-2xl">SYNCING...</div>;
 
-  if (battleState === 'completed' && battleId) {
-    return <Navigate to={`/battle-result/${battleId}`} replace />;
+  // Completed states -> redirect to result pages
+  if (gameState === 'battle_completed' && sessionId) {
+    return <Navigate to={`/battle-result/${sessionId}`} replace />;
   }
 
-  if (battleState === 'active') {
-    return <Dashboard />;
+  if (gameState === 'adventure_completed' && sessionId) {
+    return <Navigate to={`/adventure-result/${sessionId}`} replace />;
   }
 
-  return <UserDashboard />;
+  // Active states -> show arena
+  if (gameState === 'in_battle' || gameState === 'in_adventure') {
+    return <Arena />;
+  }
+
+  // Lobby state
+  return <Lobby />;
 };
-
-import BattleResult from './pages/BattleResult';
-// import EditProfile from './pages/EditProfile';
 
 function App() {
   return (
@@ -102,12 +131,18 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          {/* <Route path="/profile/edit" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} /> */}
-          <Route path="/dashboard" element={<ProtectedRoute><BattleRouter /></ProtectedRoute>} />
+          {/* Smart game router - handles routing based on game state */}
+          <Route path="/lobby" element={<ProtectedRoute><GameRouter /></ProtectedRoute>} />
+          {/* Direct arena access (when user knows they have an active game) */}
+          <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
+          {/* Legacy route - redirect to lobby for backwards compatibility */}
+          <Route path="/dashboard" element={<Navigate to="/lobby" replace />} />
           <Route path="/plan" element={<ProtectedRoute><PlanTasks /></ProtectedRoute>} />
           <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
+          <Route path="/adventure-result/:adventureId" element={<ProtectedRoute><AdventureResult /></ProtectedRoute>} />
           <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* Root redirect */}
+          <Route path="/" element={<Navigate to="/lobby" replace />} />
         </Routes>
         <Toaster position="top-right" richColors closeButton />
       </AuthProvider>

@@ -9,8 +9,12 @@ from utils.rank_calculations import (
     get_xp_progress,
     calculate_level_from_xp
 )
+from utils.stats import format_win_rate
+from utils.logging_config import get_logger
+from utils.query_columns import PROFILE_PRIVATE, BATTLE_MATCH_HISTORY, PROFILE_TIMEZONE
 
 router = APIRouter(prefix="/users", tags=["users"])
+logger = get_logger(__name__)
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -57,7 +61,7 @@ def update_profile(update_data: UserUpdate, user = Depends(get_current_user)):
 def get_profile(user = Depends(get_current_user)):
     try:
         # Fetch Profile
-        response = supabase.table("profiles").select("*").eq("id", user.id).single().execute()
+        response = supabase.table("profiles").select(PROFILE_PRIVATE).eq("id", user.id).single().execute()
         profile = response.data
         
         if not profile:
@@ -67,14 +71,16 @@ def get_profile(user = Depends(get_current_user)):
         # Wins: Count battles where status='completed' and winner_id=user.id (Assuming we have winner_id logic later, for now just count completed as placeholder or 0)
         # Actually, we don't have winner_id yet. Let's just count 'completed' battles for now as "Battles Played" or similar.
         # Wait, user asked for "Battles Won". Since we don't have scoring yet, I'll return 0 for now but structure it so it's easy to add.
-        
+
         # Streak: Count consecutive days of task completion (This requires task history, complex).
         # For MVP, let's just return 0 placeholders but explicitly in the API so frontend doesn't guess.
-        
+
         battle_count = profile.get('battle_count', 0)
         battle_win_count = profile.get('battle_win_count', 0)
-        win_rate = round((battle_win_count / battle_count) * 100, 1) if battle_count > 0 else 0
-        
+
+        # REFACTOR-002: Use shared win rate calculation
+        win_rate_str = format_win_rate(battle_win_count, battle_count)
+
         # Calculate rank
         level = profile.get('level', 1)
         rank = calculate_rank(level, battle_count, battle_win_count)
@@ -83,7 +89,7 @@ def get_profile(user = Depends(get_current_user)):
             "battle_wins": battle_win_count,
             "total_xp": profile.get("total_xp_earned", 0),
             "battle_fought": battle_count,
-            "win_rate": f"{win_rate}%",
+            "win_rate": win_rate_str,
             "tasks_completed": profile.get("completed_tasks", 0)
         }
         profile["rank"] = rank
@@ -185,17 +191,17 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
         if follow_check.data:
             is_following = True
 
-        # Calculate win rate from counts
+        # REFACTOR-002: Use shared win rate calculation
         battle_count = profile.get('battle_count', 0)
         battle_win_count = profile.get('battle_win_count', 0)
-        win_rate = round((battle_win_count / battle_count) * 100, 1) if battle_count > 0 else 0
-        
+        win_rate_str = format_win_rate(battle_win_count, battle_count)
+
         # Calculate rank
         level = profile.get('level', 1)
         rank = calculate_rank(level, battle_count, battle_win_count)
 
         # Fetch Match History (Last 5 battles)
-        battles_res = supabase.table("battles").select("*")\
+        battles_res = supabase.table("battles").select(BATTLE_MATCH_HISTORY)\
             .or_(f"user1_id.eq.{user_id},user2_id.eq.{user_id}")\
             .eq("status", "completed")\
             .order("end_date", desc=True)\
@@ -247,7 +253,7 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
                 "battle_wins": battle_win_count,
                 "total_xp": profile.get('total_xp_earned', 0),
                 "battle_fought": battle_count,
-                "win_rate": f"{win_rate}%",
+                "win_rate": win_rate_str,
                 "tasks_completed": profile.get("completed_tasks", 0)
             },
             "match_history": enriched_history
@@ -256,5 +262,5 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Public profile error: {e}")
+        logger.error(f"Public profile error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

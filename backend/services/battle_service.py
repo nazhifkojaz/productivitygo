@@ -2,12 +2,26 @@ from datetime import date, timedelta, datetime
 import pytz
 from fastapi import HTTPException
 from database import supabase
+from utils.logging_config import get_logger
+from utils.query_columns import (
+    BATTLE_STATUS_ONLY,
+    BATTLE_BASIC,
+    BATTLE_FOR_ACCEPT,
+    BATTLE_FOR_REJECT,
+    BATTLE_FOR_REMATCH,
+    BATTLE_PENDING_CHECK,
+    BATTLE_FOR_DECLINE,
+    PROFILE_EXISTS,
+    PROFILE_BASIC,
+)
+
+logger = get_logger(__name__)
 
 class BattleService:
     @staticmethod
     def create_invite(user_id: str, rival_id: str, start_date_str: str, duration: int):
         # 1. Validate Rival ID exists
-        rival_res = supabase.table("profiles").select("id, username").eq("id", rival_id).single().execute()
+        rival_res = supabase.table("profiles").select(PROFILE_BASIC).eq("id", rival_id).single().execute()
         if not rival_res.data:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -16,16 +30,16 @@ class BattleService:
             
         # 2. Check if either user is already in a battle (active or pending)
         # Check for user
-        existing = supabase.table("battles").select("*")\
+        existing = supabase.table("battles").select(BATTLE_STATUS_ONLY)\
             .or_(f"user1_id.eq.{user_id},user2_id.eq.{user_id}")\
             .in_("status", ["active", "pending"])\
             .execute()
-            
+
         if existing.data:
             raise HTTPException(status_code=400, detail="You are already in a battle or have a pending invite")
 
         # Check for rival
-        rival_existing = supabase.table("battles").select("*")\
+        rival_existing = supabase.table("battles").select(BATTLE_STATUS_ONLY)\
             .or_(f"user1_id.eq.{rival_id},user2_id.eq.{rival_id}")\
             .in_("status", ["active", "pending"])\
             .execute()
@@ -65,31 +79,45 @@ class BattleService:
 
     @staticmethod
     def accept_invite(battle_id: str, user_id: str):
-        # Verify user is the invitee
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
-        if not battle_res.data:
-            raise HTTPException(status_code=404, detail="Battle not found")
-            
-        battle = battle_res.data
-        if battle['user2_id'] != user_id:
-            raise HTTPException(status_code=403, detail="Not your invite")
-            
-        if battle['status'] != 'pending':
-            raise HTTPException(status_code=400, detail="Invite not pending")
-            
-        # Update status to active
-        res = supabase.table("battles").update({"status": "active"}).eq("id", battle_id).execute()
-        
-        # Update current_battle for BOTH users
-        supabase.table("profiles").update({"current_battle": battle_id}).eq("id", battle['user1_id']).execute()
-        supabase.table("profiles").update({"current_battle": battle_id}).eq("id", battle['user2_id']).execute()
-        
-        return res.data
+        # BUG-005 FIX: Use atomic SQL function for accepting battles
+        # This ensures battle status and both profile updates happen atomically
+        try:
+            result = supabase.rpc("accept_battle_atomic", {
+                "battle_uuid": battle_id,
+                "accepting_user": user_id
+            }).execute()
+
+            if result.data:
+                data = result.data[0] if isinstance(result.data, list) else result.data
+                success = data.get('success', False)
+                error_message = data.get('error_message')
+
+                if not success:
+                    # Map SQL error messages to appropriate HTTP exceptions
+                    if 'not found' in (error_message or '').lower():
+                        raise HTTPException(status_code=404, detail="Battle not found")
+                    elif 'not your invite' in (error_message or '').lower():
+                        raise HTTPException(status_code=403, detail="Not your invite to accept")
+                    elif 'not pending' in (error_message or '').lower():
+                        raise HTTPException(status_code=400, detail="Invite not pending")
+                    else:
+                        raise HTTPException(status_code=500, detail=f"Failed to accept battle: {error_message}")
+
+                # Fetch and return the updated battle
+                battle_res = supabase.table("battles").select(BATTLE_FOR_ACCEPT).eq("id", battle_id).single().execute()
+                return battle_res.data
+            else:
+                raise HTTPException(status_code=500, detail="Failed to accept battle")
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error accepting battle: {str(e)}")
 
     @staticmethod
     def reject_invite(battle_id: str, user_id: str):
         # Verify user is the invitee OR inviter (can cancel own invite)
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
+        battle_res = supabase.table("battles").select(BATTLE_FOR_REJECT).eq("id", battle_id).single().execute()
         if not battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
             
@@ -103,92 +131,88 @@ class BattleService:
 
     @staticmethod
     def forfeit_battle(battle_id: str, user_id: str):
-        # 1. Verify Battle
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
-        if not battle_res.data:
-            raise HTTPException(status_code=404, detail="Battle not found")
-            
-        battle = battle_res.data[0]
-        if battle['status'] != 'active':
-            raise HTTPException(status_code=400, detail="Can only forfeit active battles")
-            
-        if battle['user1_id'] != user_id and battle['user2_id'] != user_id:
-            raise HTTPException(status_code=403, detail="Not a participant in this battle")
-            
-        # 2. Determine Winner (The OTHER person)
-        winner_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
-        
-        # 3. Process the updated data
-        today_iso = date.today().isoformat()
-        
-        update_data = {
-            "status": "completed",
-            "winner_id": winner_id,
-            "end_date": today_iso
-        }
-
-        # 3.1 winner data update
-        winner_profile = supabase.table("profiles").select("battle_win_count, battle_count").eq("id", winner_id).single().execute()
-        if winner_profile.data:
-            updated_win_count = winner_profile.data.get('battle_win_count') + 1
-            updated_battle_count = winner_profile.data.get('battle_count') + 1
-
-        # 3.2 loser/user data update
-        loser_profile = supabase.table("profiles").select("battle_count").eq("id", user_id).single().execute()
-        if loser_profile.data:
-            updated_battle_count_loser = loser_profile.data.get('battle_count') + 1
-        
-        # Update data
+        # BUG-005 FIX: Use atomic SQL function for forfeiting battles
+        # This prevents race conditions and ensures all stats are updated atomically
         try:
-            supabase.table("battles").update(update_data).eq("id", battle_id).execute()
-            
-            supabase.table("profiles").update({
-                "battle_win_count": updated_win_count, 
-                "battle_count": updated_battle_count
-            }).eq("id", winner_id).execute()
+            result = supabase.rpc("forfeit_battle_atomic", {
+                "battle_uuid": battle_id,
+                "forfeiting_user": user_id
+            }).execute()
 
-            supabase.table("profiles").update({
-                "battle_count": updated_battle_count_loser
-            }).eq("id", user_id).execute()
-            
+            if result.data:
+                data = result.data[0] if isinstance(result.data, list) else result.data
+                winner_id = data.get('winner_id')
+                already_completed = data.get('already_completed', False)
+
+                if winner_id is None and not already_completed:
+                    # SQL function raised an exception
+                    raise HTTPException(status_code=500, detail="Failed to forfeit battle")
+
+                if already_completed:
+                    # Battle was already completed, return appropriate response
+                    raise HTTPException(status_code=400, detail="Battle is already completed")
+
+                return {"status": "forfeited", "winner_id": winner_id}
+            else:
+                raise HTTPException(status_code=500, detail="Failed to forfeit battle")
+
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to update battle status: {str(e)}")
-        
-        return {"status": "forfeited", "winner_id": winner_id}
+            # Check for specific SQL error messages
+            error_str = str(e).lower()
+            if 'not found' in error_str:
+                raise HTTPException(status_code=404, detail="Battle not found")
+            elif 'only forfeit active' in error_str or 'not a participant' in error_str:
+                raise HTTPException(status_code=400, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=f"Error forfeiting battle: {str(e)}")
 
     @staticmethod
     def complete_battle(battle_id: str):
         # 1. Verify Battle
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+        battle_res = supabase.table("battles").select(BATTLE_STATUS_ONLY).eq("id", battle_id).execute()
         if not battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
-            
+
         battle = battle_res.data[0]
-        if battle['status'] != 'active':
+
+        # Allow both 'active' and 'completed' statuses for idempotency
+        # If already completed, the SQL function will handle it idempotently
+        if battle['status'] not in ('active', 'completed'):
             raise HTTPException(status_code=400, detail="Battle is not active")
-            
-        # 2. Call database function to complete battle
+
+        # 2. Call database function to complete battle (now idempotent)
         try:
             result = supabase.rpc("complete_battle", {"battle_uuid": battle_id}).execute()
             if result.data:
                 data = result.data[0] if isinstance(result.data, list) else result.data
+                already_completed = data.get('already_completed', False)
+
+                # Log idempotent calls for monitoring
+                if already_completed:
+                    logger.info(f"Battle {battle_id} was already completed, returning existing result (idempotent call)")
+
                 return {
                     "status": "completed",
                     "winner_id": data.get('winner_id'),
                     "scores": {
                         "user1_total_xp": data.get('user1_total_xp'),
                         "user2_total_xp": data.get('user2_total_xp')
-                    }
+                    },
+                    "already_completed": already_completed  # Indicates if this was an idempotent call
                 }
             else:
                 raise HTTPException(status_code=500, detail="Failed to complete battle")
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error completing battle: {str(e)}")
 
     @staticmethod
     def calculate_round(battle_id: str, round_date_str: str = None):
         # 1. Verify Battle
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+        battle_res = supabase.table("battles").select(BATTLE_STATUS_ONLY).eq("id", battle_id).execute()
         if not battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
             
@@ -233,7 +257,7 @@ class BattleService:
     @staticmethod
     def archive_battle(battle_id: str):
         # Verify battle exists
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+        battle_res = supabase.table("battles").select(PROFILE_EXISTS).eq("id", battle_id).execute()
         if not battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
             
@@ -246,25 +270,27 @@ class BattleService:
     @staticmethod
     def create_rematch(battle_id: str, user_id: str):
         # 1. Get old battle to find opponent
-        old_battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+        old_battle_res = supabase.table("battles").select(BATTLE_FOR_REMATCH).eq("id", battle_id).execute()
         if not old_battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
         old_battle = old_battle_res.data[0]
-        
+
         opponent_id = old_battle['user2_id'] if old_battle['user1_id'] == user_id else old_battle['user1_id']
-        
-        # 2. Check if pending rematch already exists
-        all_pending = supabase.table("battles").select("*").eq("status", "pending").execute()
+
+        # 2. Check if pending rematch already exists (server-side filtering - item 6.1)
         user1_id = old_battle['user1_id']
         user2_id = old_battle['user2_id']
-        
-        existing_pending = [p for p in all_pending.data 
-                            if (p['user1_id'] == user1_id and p['user2_id'] == user2_id) 
-                            or (p['user1_id'] == user2_id and p['user2_id'] == user1_id)]
-        
-        if existing_pending:
+
+        # Use OR clause for server-side filtering instead of loading all pending battles
+        existing_pending = supabase.table("battles").select(BATTLE_PENDING_CHECK)\
+            .eq("status", "pending")\
+            .or_(f"and(user1_id.eq.{user1_id},user2_id.eq.{user2_id}),and(user1_id.eq.{user2_id},user2_id.eq.{user1_id})")\
+            .limit(1)\
+            .execute()
+
+        if existing_pending.data:
             # Rematch already requested, just return it
-            return {"status": "rematch_already_exists", "battle": existing_pending[0]}
+            return {"status": "rematch_already_exists", "battle": existing_pending.data[0]}
         
         # 3. Create new battle (Pending)
         today = date.today()
@@ -290,7 +316,7 @@ class BattleService:
     @staticmethod
     def decline_rematch(battle_id: str):
         # Find the pending battle
-        battle_res = supabase.table("battles").select("*").eq("id", battle_id).execute()
+        battle_res = supabase.table("battles").select(BATTLE_FOR_DECLINE).eq("id", battle_id).execute()
         if not battle_res.data:
             raise HTTPException(status_code=404, detail="Battle not found")
             

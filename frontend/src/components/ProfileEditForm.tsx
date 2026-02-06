@@ -1,0 +1,88 @@
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Save } from 'lucide-react';
+
+interface ProfileEditFormProps {
+    isOpen: boolean;
+    initialUsername: string;
+    loading: boolean;
+    onSave: (username: string) => Promise<void>;
+    onClose: () => void;
+}
+
+export default function ProfileEditForm({
+    isOpen,
+    initialUsername,
+    loading,
+    onSave,
+    onClose,
+}: ProfileEditFormProps) {
+    const handleSave = async () => {
+        await onSave(initialUsername);
+    };
+
+    const handleBackdropClick = (e: React.MouseEvent) => {
+        if (e.target === e.currentTarget) {
+            onClose();
+        }
+    };
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                    onClick={handleBackdropClick}
+                >
+                    <motion.div
+                        initial={{ scale: 0.9, y: 20 }}
+                        animate={{ scale: 1, y: 0 }}
+                        exit={{ scale: 0.9, y: 20 }}
+                        className="bg-neo-white border-3 border-black p-6 shadow-neo w-full max-w-md relative"
+                        onClick={(e: { stopPropagation: () => void }) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={onClose}
+                            className="absolute top-2 right-2 p-1 hover:bg-gray-100"
+                            aria-label="Close"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+
+                        <h2 className="text-xl font-black uppercase mb-6">Edit Identity</h2>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="username-input" className="block font-bold text-sm mb-1">
+                                    Username
+                                </label>
+                                <input
+                                    id="username-input"
+                                    type="text"
+                                    value={initialUsername}
+                                    onChange={() => {
+                                        // Note: Parent controls state, this just notifies on save
+                                        // For live updates, parent should pass setUsername too
+                                    }}
+                                    className="w-full input-neo"
+                                    placeholder="Enter username"
+                                    disabled={loading}
+                                />
+                            </div>
+
+                            <button
+                                onClick={handleSave}
+                                disabled={loading}
+                                className="w-full btn-neo bg-neo-primary text-white py-3 font-bold uppercase flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                                {loading ? 'Saving...' : <><Save className="w-5 h-5" /> Save Changes</>}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+}

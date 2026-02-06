@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -6,47 +6,60 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     Shield, Zap, Check, Plus,
-    User, AlertTriangle, Flag
+    User, AlertTriangle, Flag, Coffee
 } from 'lucide-react';
 import RivalRadar from '../components/RivalRadar';
+import MonsterCard from '../components/MonsterCard';
 import { useCurrentBattle } from '../hooks/useCurrentBattle';
 import { useProfile } from '../hooks/useProfile';
-
-interface Task {
-    id: string;
-    content: string;
-    is_completed: boolean;
-    is_optional: boolean;
-    assigned_score: number;
-}
+import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
+import { useAdventureMutations } from '../hooks/useAdventureMutations';
+import { useTodayTasks } from '../hooks/useTodayTasks';
+import { useTaskMutations } from '../hooks/useTaskMutations';
 
 export default function Dashboard() {
     const { session, user } = useAuth();
     const navigate = useNavigate();
-    const { data: battle, isLoading } = useCurrentBattle();
+    const { data: battle, isLoading: battleLoading } = useCurrentBattle();
     const { data: profile } = useProfile();
-    const [tasks, setTasks] = useState<Task[]>([]);
+    const { data: adventure, isLoading: adventureLoading } = useCurrentAdventure();
+    const { abandonAdventureMutation, scheduleBreakMutation } = useAdventureMutations();
     const [timeUntilBattle, setTimeUntilBattle] = useState<string>('');
 
-    useEffect(() => {
-        if (battle) {
-            fetchTasks();
-        }
-    }, [battle]);
+    // Determine game mode - adventure takes priority if both exist
+    const isAdventureMode = !!adventure && !battle;
+    const isLoading = battleLoading || adventureLoading;
 
-    // Countdown timer for pre-battle
+    // Determine if we should show tasks (only during active battle/adventure days)
+    // Derive app_state from adventure when in adventure mode, from battle when in PVP mode
+    const appState = isAdventureMode
+        ? (adventure?.app_state || 'ACTIVE')
+        : (battle?.app_state || 'IN_BATTLE');
+    const isPreBattle = appState === 'PRE_BATTLE' || appState === 'PRE_ADVENTURE';
+    const isLastDay = appState === 'LAST_BATTLE_DAY' || appState === 'LAST_DAY';
+    const isPending = appState === 'PENDING_ACCEPTANCE';
+    const shouldShowTasks = !isPreBattle && !isPending;
+
+    // Fetch today's tasks using React Query hook
+    const { data: tasks = [] } = useTodayTasks({
+        enabled: shouldShowTasks && (!!battle || !!adventure)
+    });
+
+    // Task mutations
+    const { completeTaskMutation } = useTaskMutations();
+
+    // Countdown timer for pre-battle and pre-adventure
     useEffect(() => {
-        if (!battle || battle.app_state !== 'PRE_BATTLE' || !profile?.timezone) return;
+        if (!isPreBattle || !profile?.timezone) return;
 
         const updateCountdown = () => {
             const now = new Date();
 
             // Parse the start date (YYYY-MM-DD) as midnight in the user's timezone
             const userTimezone = profile.timezone;
-            const startDateStr = battle.start_date; // e.g., "2025-11-28"
+            const startDateStr = isAdventureMode ? adventure!.start_date : battle!.start_date;
 
             // Create a date string at midnight in the user's timezone
-            // We need to get "YYYY-MM-DD 00:00:00" interpreted in the user's timezone
             const [year, month, day] = startDateStr.split('-').map(Number);
 
             // Get current time in user's timezone to extract offset
@@ -86,57 +99,21 @@ export default function Dashboard() {
         const interval = setInterval(updateCountdown, 1000);
 
         return () => clearInterval(interval);
-    }, [battle, profile]);
-
-    const fetchTasks = async () => {
-        if (!battle) return;
-
-        // 2. Get Today's Tasks (Only if IN_BATTLE or LAST_BATTLE_DAY)
-        if (battle.app_state === 'IN_BATTLE' || battle.app_state === 'LAST_BATTLE_DAY') {
-            try {
-                const tasksRes = await axios.get('/api/tasks/today', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
-                setTasks(tasksRes.data);
-            } catch (error) {
-                console.error("Failed to load tasks", error);
-                setTasks([]);
-            }
-        } else {
-            setTasks([]);
-        }
-    };
+    }, [battle, adventure, isAdventureMode, isPreBattle, profile]);
 
     const toggleTask = async (taskId: string, isCompleted: boolean) => {
-        // Optimistic Update
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: isCompleted } : t));
-
-        try {
-            if (isCompleted) {
-                await axios.post(`/api/tasks/${taskId}/complete`, {}, {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
-            } else {
-                // Undo completion (if supported API-wise, currently only complete endpoint exists)
-                // Assuming we can't undo for now or need undo endpoint.
-                // For MVP, let's assume complete is one-way or add undo endpoint later.
-                // Reverting optimistic update if not supported
-                toast.error("Undoing tasks is not yet supported by the protocol.");
-                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !isCompleted } : t));
-            }
-        } catch (error) {
-            console.error("Failed to update task", error);
-            // Revert
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !isCompleted } : t));
+        if (isCompleted) {
+            // React Query handles optimistic updates internally if configured
+            // For now, the mutation will invalidate and refetch
+            await completeTaskMutation.mutateAsync(taskId);
+        } else {
+            // Undo completion (if supported API-wise, currently only complete endpoint exists)
+            toast.error("Undoing tasks is not yet supported by the protocol.");
         }
     };
 
     if (isLoading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">INITIALIZING BATTLEFIELD...</div>;
 
-    const appState = battle?.app_state || 'IN_BATTLE';
-    const isPreBattle = appState === 'PRE_BATTLE';
-    const isLastDay = appState === 'LAST_BATTLE_DAY';
-    const isPending = appState === 'PENDING_ACCEPTANCE';
     const isCreator = battle?.user1_id === user?.id;
 
     const handleAcceptInvite = async () => {
@@ -165,6 +142,37 @@ export default function Dashboard() {
         }
     };
 
+    const handleRetreat = async () => {
+        if (!adventure) return;
+        if (!confirm("Retreat from adventure? You'll receive 50% of earned XP.")) return;
+
+        try {
+            await abandonAdventureMutation.mutateAsync(adventure.id);
+            toast.success("Retreated from adventure");
+            navigate(`/adventure-result/${adventure.id}`);
+        } catch (error) {
+            console.error("Failed to retreat", error);
+            toast.error("Failed to retreat from adventure");
+        }
+    };
+
+    const handleScheduleBreak = async () => {
+        if (!adventure) return;
+        if (adventure.break_days_used >= 2) {
+            toast.error("No break days remaining");
+            return;
+        }
+        if (!confirm("Schedule a break day for tomorrow? The deadline will extend by 1 day.")) return;
+
+        try {
+            await scheduleBreakMutation.mutateAsync(adventure.id);
+            toast.success("Break day scheduled for tomorrow!");
+        } catch (error: any) {
+            console.error("Failed to schedule break", error);
+            toast.error(error.response?.data?.detail || "Failed to schedule break");
+        }
+    };
+
     return (
         <main className="min-h-screen bg-neo-bg p-4 md:p-8 pb-48 flex flex-col items-center">
             {/* Header */}
@@ -172,7 +180,16 @@ export default function Dashboard() {
                 <div className="bg-neo-white border-3 border-black p-4 shadow-neo-sm">
                     <h1 className="text-2xl font-black italic uppercase">Battle <span className="text-neo-primary">Dashboard</span></h1>
                     <div className="text-xs font-bold text-gray-500">
-                        {isPreBattle ? 'PREPARING FOR BATTLE' : isPending ? 'AWAITING RIVAL' : `ROUND ${battle?.rounds_played || 1} / 5`}
+                        {isAdventureMode
+                            ? (isPreBattle
+                                ? 'PREPARING FOR ADVENTURE'
+                                : `DAY ${adventure?.current_round || 1} • ${adventure?.days_remaining || 0} DAYS LEFT`)
+                            : isPreBattle
+                                ? 'PREPARING FOR BATTLE'
+                                : isPending
+                                    ? 'AWAITING RIVAL'
+                                    : `ROUND ${battle?.rounds_played || 1} / 5`
+                        }
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -194,13 +211,17 @@ export default function Dashboard() {
             {isPreBattle && (
                 <div className="w-full max-w-3xl bg-yellow-300 border-3 border-black p-6 shadow-neo mb-8 text-center">
                     <h2 className="text-2xl font-black uppercase mb-2 flex items-center justify-center gap-2">
-                        <AlertTriangle className="w-8 h-8" /> Battle Pending
+                        <AlertTriangle className="w-8 h-8" /> {isAdventureMode ? 'Adventure Pending' : 'Battle Pending'}
                     </h2>
-                    <p className="font-bold mb-1">The battle begins in</p>
+                    <p className="font-bold mb-1">
+                        {isAdventureMode ? 'The hunt begins in' : 'The battle begins in'}
+                    </p>
                     <div className="text-3xl font-black text-neo-primary mb-2">
                         {timeUntilBattle || 'Loading...'}
                     </div>
-                    <p className="font-bold text-sm">Prepare your protocols.</p>
+                    <p className="font-bold text-sm">
+                        {isAdventureMode ? 'Plan your first day of tasks.' : 'Prepare your protocols.'}
+                    </p>
                 </div>
             )}
 
@@ -227,8 +248,12 @@ export default function Dashboard() {
             )}
 
             <div className="w-full max-w-3xl space-y-8">
-                {/* Rival Radar */}
-                <RivalRadar battle={battle} />
+                {/* Opponent Display - RivalRadar for PVP, MonsterCard for Adventure */}
+                {isAdventureMode ? (
+                    <MonsterCard adventure={adventure} />
+                ) : (
+                    <RivalRadar battle={battle} />
+                )}
 
                 {/* Active Tasks (Hide if Pre-Battle or Pending) */}
                 {!isPreBattle && !isPending && (
@@ -297,25 +322,36 @@ export default function Dashboard() {
                         ⚠️ FINAL DAY - NO PLANNING REQUIRED
                     </div>
                 )}
+
+                {/* Break Day Button (Adventure only, hide during PRE_ADVENTURE) */}
+                {isAdventureMode && adventure && !isPreBattle && adventure.break_days_used < 2 && (
+                    <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleScheduleBreak}
+                        className="w-full max-w-3xl btn-neo bg-yellow-300 text-black py-4 text-lg font-black uppercase tracking-wide flex items-center justify-center gap-2"
+                    >
+                        <Coffee className="w-5 h-5" />
+                        Schedule Break ({2 - adventure.break_days_used} remaining)
+                    </motion.button>
+                )}
             </div>
 
-            {/* Danger Zone: Surrender */}
-            {
-                !isPending && (
-                    <div className="w-full max-w-3xl mt-8 mb-12 flex justify-center">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={handleForfeit}
-                            className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white font-bold border-3 border-black shadow-neo hover:bg-red-600 transition-colors"
-                            title="Surrender Battle"
-                        >
-                            <Flag className="w-5 h-5 fill-white" />
-                            SURRENDER
-                        </motion.button>
-                    </div>
-                )
-            }
+            {/* Danger Zone: Surrender/Retreat */}
+            {!isPending && (
+                <div className="w-full max-w-3xl mt-8 mb-12 flex justify-center">
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={isAdventureMode ? handleRetreat : handleForfeit}
+                        className="flex items-center gap-2 px-6 py-3 bg-red-500 text-white font-bold border-3 border-black shadow-neo hover:bg-red-600 transition-colors"
+                        title={isAdventureMode ? "Retreat from Adventure" : "Surrender Battle"}
+                    >
+                        <Flag className="w-5 h-5 fill-white" />
+                        {isAdventureMode ? 'RETREAT' : 'SURRENDER'}
+                    </motion.button>
+                </div>
+            )}
         </main >
     );
 }
