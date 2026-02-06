@@ -44,26 +44,34 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
     profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     profile = profile_res.data
-    
+
     # 2. Determine "Tomorrow" for the user
     user_today = get_user_date(profile['timezone'])
     user_tomorrow = user_today + timedelta(days=1)
-    
+
     # Calculate Quota
     quota = get_daily_quota(user_tomorrow)
-    
+
     # Validate Tasks
-    mandatory_tasks = [t for t in tasks if not t.is_optional]
-    optional_tasks = [t for t in tasks if t.is_optional]
-    
+    # Filter out empty tasks (empty content) before validation
+    non_empty_tasks = [t for t in tasks if t.content and t.content.strip()]
+    mandatory_tasks = [t for t in non_empty_tasks if not t.is_optional]
+    optional_tasks = [t for t in non_empty_tasks if t.is_optional]
+
+    # Allow incomplete plans - players can save fewer than quota mandatory tasks
+    # This motivates them to add more tasks later, and they'll lose points if they don't fill everything
     if len(mandatory_tasks) > quota:
         raise HTTPException(status_code=400, detail=f"You cannot submit more than {quota} mandatory tasks.")
-    
+
+    # Optional tasks are a bonus - only allowed if all mandatory slots are filled
+    if len(optional_tasks) > 0 and len(mandatory_tasks) < quota:
+        raise HTTPException(status_code=400, detail=f"You must fill all {quota} mandatory task slots before adding optional bonus tasks.")
+
     if len(mandatory_tasks) == 0 and len(optional_tasks) == 0:
-         raise HTTPException(status_code=400, detail="You must submit at least one task.")
-        
+        raise HTTPException(status_code=400, detail="You must submit at least one task.")
+
     if len(optional_tasks) > 2:
         raise HTTPException(status_code=400, detail="You can only submit up to 2 optional tasks.")
 
@@ -76,7 +84,8 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
     entry_key = get_daily_entry_key(session_id, game_mode)
 
     # Check if entry exists
-    entry_res = supabase.table("daily_entries").select("id")\
+    # Need to select battle_id and adventure_id for entry matching logic
+    entry_res = supabase.table("daily_entries").select("id, battle_id, adventure_id")\
         .eq("user_id", user.id)\
         .eq("date", user_tomorrow.isoformat())\
         .execute()

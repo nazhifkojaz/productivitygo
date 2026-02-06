@@ -66,9 +66,9 @@ class TestDraftTasksEntryMatching:
         # Setup profile mock
         setup_profile_mock(mock_supabase_base, 'user-123', timezone='UTC')
 
-        # Mock active battle
+        # Mock active battle (using maybe_single now)
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.single.return_value.execute.return_value = \
+            .eq.return_value.maybe_single.return_value.execute.return_value = \
             create_mock_execute_response({'id': 'battle-123'})
 
         # Mock daily_entries query returning entries
@@ -255,7 +255,7 @@ class TestDraftTasksValidation:
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.single.return_value.execute.side_effect = [
+            .eq.return_value.maybe_single.return_value.execute.side_effect = [
             battle_response,
             adventure_response,
         ]
@@ -289,7 +289,7 @@ class TestDraftTasksValidation:
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.single.return_value.execute.side_effect = [
+            .eq.return_value.maybe_single.return_value.execute.side_effect = [
             battle_response,
             adventure_response,
         ]
@@ -318,7 +318,7 @@ class TestDraftTasksValidation:
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.single.return_value.execute.side_effect = [
+            .eq.return_value.maybe_single.return_value.execute.side_effect = [
             battle_response,
             adventure_response,
         ]
@@ -328,10 +328,13 @@ class TestDraftTasksValidation:
 
         from routers.tasks import draft_tasks
 
-        # Mock get_daily_quota
+        # Mock get_daily_quota to return 5
         with patch('routers.tasks.get_daily_quota', return_value=5):
-            # Submit 3 optional tasks (exceeds limit of 2)
+            # Submit all 5 mandatory tasks plus 3 optional tasks (exceeds limit of 2)
             tasks = [
+                TaskCreate(content=f"Task {i}", is_optional=False)
+                for i in range(5)
+            ] + [
                 TaskCreate(content=f"Optional {i}", is_optional=True)
                 for i in range(3)
             ]
@@ -341,3 +344,76 @@ class TestDraftTasksValidation:
 
             assert exc_info.value.status_code == 400
             assert "up to 2 optional" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_draft_tasks_incomplete_plan_allowed(self, mock_supabase_base, mock_user):
+        """Should allow incomplete mandatory task plans (fewer than quota)."""
+        setup_profile_mock(mock_supabase_base, 'user-123', timezone='UTC')
+
+        # Mock active adventure
+        battle_response = create_mock_execute_response(None)
+        adventure_response = create_mock_execute_response({'id': 'adventure-123'})
+
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .eq.return_value.maybe_single.return_value.execute.side_effect = [
+            battle_response,
+            adventure_response,
+        ]
+
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
+            .return_value.execute.return_value = create_mock_execute_response([])
+
+        mock_supabase_base.table.return_value.insert.return_value.execute\
+            .return_value = create_mock_execute_response([{
+                'id': 'entry-new',
+                'user_id': 'user-123',
+            }])
+
+        from routers.tasks import draft_tasks
+
+        # Mock get_daily_quota to return 5
+        with patch('routers.tasks.get_daily_quota', return_value=5):
+            # Submit only 2 mandatory tasks (less than quota of 5) - should succeed
+            tasks = [
+                TaskCreate(content="Task 1", is_optional=False),
+                TaskCreate(content="Task 2", is_optional=False),
+            ]
+
+            result = await draft_tasks(tasks, mock_user)
+            # If we got here without exception, the incomplete plan was accepted
+
+    @pytest.mark.asyncio
+    async def test_draft_tasks_optional_without_full_mandatory_raises(self, mock_supabase_base, mock_user):
+        """Should raise error when optional tasks submitted but mandatory not full."""
+        setup_profile_mock(mock_supabase_base, 'user-123', timezone='UTC')
+
+        # Mock active adventure
+        battle_response = create_mock_execute_response(None)
+        adventure_response = create_mock_execute_response({'id': 'adventure-123'})
+
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .eq.return_value.maybe_single.return_value.execute.side_effect = [
+            battle_response,
+            adventure_response,
+        ]
+
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
+            .return_value.execute.return_value = create_mock_execute_response([])
+
+        from routers.tasks import draft_tasks
+
+        # Mock get_daily_quota to return 5
+        with patch('routers.tasks.get_daily_quota', return_value=5):
+            # Submit 1 optional task but only 3 mandatory (quota is 5) - should fail
+            tasks = [
+                TaskCreate(content="Task 1", is_optional=False),
+                TaskCreate(content="Task 2", is_optional=False),
+                TaskCreate(content="Task 3", is_optional=False),
+                TaskCreate(content="Optional 1", is_optional=True),
+            ]
+
+            with pytest.raises(HTTPException) as exc_info:
+                await draft_tasks(tasks, mock_user)
+
+            assert exc_info.value.status_code == 400
+            assert "fill all" in exc_info.value.detail

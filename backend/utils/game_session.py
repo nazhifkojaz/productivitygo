@@ -44,18 +44,18 @@ def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
     battle_res = supabase.table("battles").select("id")\
         .or_(f"user1_id.eq.{user_id},user2_id.eq.{user_id}")\
         .eq("status", "active")\
-        .single().execute()
+        .maybe_single().execute()
 
-    if battle_res.data:
+    if battle_res and battle_res.data:
         return battle_res.data['id'], GameMode.PVP
 
     # 2. Check for active adventure
     adventure_res = supabase.table("adventures").select("id")\
         .eq("user_id", user_id)\
         .eq("status", "active")\
-        .single().execute()
+        .maybe_single().execute()
 
-    if adventure_res.data:
+    if adventure_res and adventure_res.data:
         return adventure_res.data['id'], GameMode.ADVENTURE
 
     # 3. No active session found
