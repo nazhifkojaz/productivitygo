@@ -125,7 +125,7 @@ class TestTasksQueryColumns:
         """Verify TASKS_FULL contains all fields needed for task response."""
         expected = {
             "id", "daily_entry_id", "content", "is_optional",
-            "assigned_score", "is_completed", "proof_url", "created_at"
+            "is_completed", "proof_url", "created_at"
         }
         actual = set(TASKS_FULL.split(", "))
         assert actual == expected

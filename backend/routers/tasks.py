@@ -119,33 +119,21 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
         new_entry = supabase.table("daily_entries").insert(new_entry_data).execute()
         entry_id = new_entry.data[0]['id']
         
-    # Calculate Scores
-    # Mandatory: 100 points distributed evenly
-    # Optional: 5 points each
-    mandatory_score_base = 100 // quota
-    mandatory_remainder = 100 % quota
-    
     # 4. Insert Tasks
     task_data = []
-    
-    # Process Mandatory Tasks
-    for i, t in enumerate(mandatory_tasks):
-        # Distribute remainder to first few tasks
-        score = mandatory_score_base + (1 if i < mandatory_remainder else 0)
+
+    for t in mandatory_tasks:
         task_data.append({
             "daily_entry_id": entry_id,
             "content": t.content,
             "is_optional": False,
-            "assigned_score": score
         })
-        
-    # Process Optional Tasks
+
     for t in optional_tasks:
         task_data.append({
             "daily_entry_id": entry_id,
             "content": t.content,
             "is_optional": True,
-            "assigned_score": 5
         })
     
     if task_data:

@@ -407,7 +407,7 @@ class TestProfilesModification:
                 FROM information_schema.columns
                 WHERE table_name = 'profiles'
                 AND column_name IN (
-                    'current_adventure', 'adventure_count', 'adventure_win_count',
+                    'current_adventure', 'adventure_count',
                     'monster_defeats', 'monster_escapes', 'monster_rating',
                     'highest_tier_reached'
                 );
@@ -415,7 +415,7 @@ class TestProfilesModification:
             columns = {row[0] for row in cursor.fetchall()}
 
             expected_columns = {
-                'current_adventure', 'adventure_count', 'adventure_win_count',
+                'current_adventure', 'adventure_count',
                 'monster_defeats', 'monster_escapes', 'monster_rating',
                 'highest_tier_reached'
             }

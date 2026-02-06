@@ -45,10 +45,8 @@ class DailyEntryBase(BaseModel):
 
 class DailyEntry(DailyEntryBase):
     id: UUID
-    # REFACTOR-003: battle_id will become Optional when adventure mode is added
-    # For now, it's required and links to the active battle
-    battle_id: UUID
-    # adventure_id: Optional[UUID] = None  # TODO: Add for adventure mode
+    battle_id: Optional[UUID] = None
+    adventure_id: Optional[UUID] = None
     user_id: UUID
     created_at: datetime
     tasks: List[Task] = []

@@ -119,7 +119,7 @@ def reset_profile_stats(db_conn, test_data):
     try:
         # Get current stats
         cursor.execute("""
-            SELECT adventure_count, adventure_win_count, monster_defeats,
+            SELECT adventure_count, monster_defeats,
                    monster_escapes, monster_rating, highest_tier_reached
             FROM profiles WHERE id = %s;
         """, (user_id,))
@@ -129,7 +129,6 @@ def reset_profile_stats(db_conn, test_data):
         cursor.execute("""
             UPDATE profiles SET
                 adventure_count = 0,
-                adventure_win_count = 0,
                 monster_defeats = 0,
                 monster_escapes = 0,
                 monster_rating = 0,
@@ -145,7 +144,6 @@ def reset_profile_stats(db_conn, test_data):
         cursor.execute("""
             UPDATE profiles SET
                 adventure_count = %s,
-                adventure_win_count = %s,
                 monster_defeats = %s,
                 monster_escapes = %s,
                 monster_rating = %s,
@@ -360,17 +358,16 @@ class TestCompleteAdventure:
 
             # Check profile stats
             cursor.execute("""
-                SELECT adventure_count, adventure_win_count, monster_defeats,
+                SELECT adventure_count, monster_defeats,
                        monster_escapes, monster_rating
                 FROM profiles WHERE id = %s;
             """, (user_id,))
             stats = cursor.fetchone()
 
             assert stats[0] == 1, f"adventure_count should be 1, got {stats[0]}"
-            assert stats[1] == 1, f"adventure_win_count should be 1, got {stats[1]}"
-            assert stats[2] == 1, f"monster_defeats should be 1, got {stats[2]}"
-            assert stats[3] == 0, f"monster_escapes should be 0, got {stats[3]}"
-            assert stats[4] == 1, f"monster_rating should be 1, got {stats[4]}"
+            assert stats[1] == 1, f"monster_defeats should be 1, got {stats[1]}"
+            assert stats[2] == 0, f"monster_escapes should be 0, got {stats[2]}"
+            assert stats[3] == 1, f"monster_rating should be 1, got {stats[3]}"
 
         finally:
             cursor.close()
@@ -398,17 +395,16 @@ class TestCompleteAdventure:
 
             # Check profile stats
             cursor.execute("""
-                SELECT adventure_count, adventure_win_count, monster_defeats,
+                SELECT adventure_count, monster_defeats,
                        monster_escapes, monster_rating
                 FROM profiles WHERE id = %s;
             """, (user_id,))
             stats = cursor.fetchone()
 
             assert stats[0] == 1, f"adventure_count should be 1"
-            assert stats[1] == 0, f"adventure_win_count should be 0"
-            assert stats[2] == 0, f"monster_defeats should be 0"
-            assert stats[3] == 1, f"monster_escapes should be 1"
-            assert stats[4] == 0, f"monster_rating should be 0 (floored)"
+            assert stats[1] == 0, f"monster_defeats should be 0"
+            assert stats[2] == 1, f"monster_escapes should be 1"
+            assert stats[3] == 0, f"monster_rating should be 0 (floored)"
 
         finally:
             cursor.close()

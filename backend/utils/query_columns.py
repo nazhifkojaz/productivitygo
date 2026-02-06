@@ -55,7 +55,7 @@ PROFILE_PRIVATE = "id, username, email, level, total_xp_earned, battle_count, ba
 # =============================================================================
 
 # For fetching tasks (all fields needed for response)
-TASKS_FULL = "id, daily_entry_id, content, is_optional, assigned_score, is_completed, proof_url, created_at"
+TASKS_FULL = "id, daily_entry_id, content, is_optional, is_completed, proof_url, created_at"
 
 # =============================================================================
 # Battle Table Columns (Additions)
