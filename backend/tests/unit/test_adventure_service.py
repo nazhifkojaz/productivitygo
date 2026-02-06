@@ -358,6 +358,75 @@ class TestAdventureCreation:
         assert result['id'] == 'adv-123'
         assert result['status'] == 'active'
 
+    def test_create_adventure_start_date_is_tomorrow(self, mock_supabase_base):
+        """Adventure start_date should be tomorrow, giving a preparation day."""
+        # Mock no active battles
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .in_.return_value.execute.return_value = create_mock_execute_response([])
+
+        # Mock no active adventure
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
+            .return_value.execute.return_value = create_mock_execute_response([])
+
+        # Mock monster and profile
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
+            .return_value.execute.side_effect = [
+                create_mock_execute_response({
+                    'id': 'monster-1',
+                    'name': 'Slime',
+                    'tier': 'easy',
+                    'base_hp': 100
+                }),
+                create_mock_execute_response({'monster_rating': 0}),
+            ]
+
+        # Capture the inserted adventure data to verify start_date
+        inserted_data = {}
+
+        # Get a reference to the insert mock's execute method
+        insert_execute_mock = mock_supabase_base.table.return_value.insert.return_value.execute
+
+        def capture_insert(data):
+            # Store the inserted data
+            inserted_data.update(data)
+            # Return a complete adventure with the captured dates
+            response = {
+                'id': 'adv-123',
+                'user_id': 'user-123',
+                'monster_id': 'monster-1',
+                'status': 'active',
+                'start_date': data.get('start_date'),
+                'deadline': data.get('deadline'),
+            }
+            return create_mock_execute_response([response])
+
+        # Mock the chained call: table().insert().execute()
+        # We need to check the argument passed to insert()
+        insert_mock = mock_supabase_base.table.return_value.insert
+
+        def mock_insert_call(data):
+            inserted_data.update(data)
+            # Return a mock that when execute() is called returns our response
+            execute_mock = Mock()
+            execute_mock.execute.return_value = create_mock_execute_response([{
+                'id': 'adv-123',
+                'user_id': 'user-123',
+                'monster_id': 'monster-1',
+                'status': 'active',
+                'start_date': data.get('start_date'),
+                'deadline': data.get('deadline'),
+            }])
+            return execute_mock
+
+        insert_mock.side_effect = mock_insert_call
+
+        AdventureService.create_adventure('user-123', 'monster-1')
+
+        # Verify start_date is tomorrow
+        expected_start = (date.today() + timedelta(days=1)).isoformat()
+        assert inserted_data['start_date'] == expected_start, \
+            f"start_date should be tomorrow ({expected_start}), got {inserted_data['start_date']}"
+
     def test_create_adventure_active_battle_raises(self, mock_supabase_base):
         """Raise exception when user has active battle."""
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\

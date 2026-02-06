@@ -292,7 +292,8 @@ class AdventureService:
         duration = random.randint(min_dur, max_dur)
 
         # 6. Create adventure
-        start_date_val = date.today()
+        # Start date is tomorrow, giving users a preparation day to plan tasks
+        start_date_val = date.today() + timedelta(days=1)
         deadline_val = start_date_val + timedelta(days=duration - 1)
 
         adventure_data = {
