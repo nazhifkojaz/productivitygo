@@ -11,7 +11,6 @@ class ProfileBase(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     level: int = 1
-    exp: int = 0
     timezone: str = "UTC"
 
 class Profile(ProfileBase):
@@ -52,8 +51,6 @@ class DailyEntry(DailyEntryBase):
     battle_id: UUID
     # adventure_id: Optional[UUID] = None  # TODO: Add for adventure mode
     user_id: UUID
-    score_distribution: Optional[List[int]] = None
-    day_winner: Optional[bool] = None
     created_at: datetime
     tasks: List[Task] = []
 
