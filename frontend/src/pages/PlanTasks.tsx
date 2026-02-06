@@ -14,6 +14,7 @@ export default function PlanTasks() {
     const [mandatoryTasks, setMandatoryTasks] = useState<string[]>([]);
     const [optionalTasks, setOptionalTasks] = useState<string[]>(['', '']);
     const [timeLeft, setTimeLeft] = useState<string>("");
+    const [initializedQuota, setInitializedQuota] = useState<number | null>(null);
 
     const userTimezone = profile?.timezone || 'UTC';
 
@@ -26,11 +27,15 @@ export default function PlanTasks() {
 
     // Populate form from draft tasks when data changes
     useEffect(() => {
+        // Skip if already initialized for this quota value to prevent infinite loop
+        if (initializedQuota === quota) return;
+
         if (draftTasks.length === 0) {
             // No draft tasks, initialize with empty strings
             const mandatoryFill = new Array(quota).fill('');
             setMandatoryTasks(mandatoryFill);
             setOptionalTasks(['', '']);
+            setInitializedQuota(quota);
             return;
         }
 
@@ -49,7 +54,8 @@ export default function PlanTasks() {
             if (i < 2) optionalFill[i] = content;
         });
         setOptionalTasks(optionalFill);
-    }, [draftTasks, quota]);
+        setInitializedQuota(quota);
+    }, [draftTasks, quota, initializedQuota]);
 
     // Countdown Timer - separate effect to use userTimezone
     useEffect(() => {
@@ -90,14 +96,20 @@ export default function PlanTasks() {
         setOptionalTasks(newTasks);
     };
 
+    // Calculate filled mandatory task count
+    const filledMandatoryCount = mandatoryTasks.filter(t => t.trim().length > 0).length;
+    const isMandatoryComplete = filledMandatoryCount === quota;
+
     // Relaxed validation: Allow saving if at least one task (mandatory or optional) is filled
     const isValid = mandatoryTasks.some(t => t.trim().length > 0) || optionalTasks.some(t => t.trim().length > 0);
 
     const handleSave = async () => {
         if (!isValid) return;
 
+        // Filter out empty mandatory tasks before submitting
+        // Empty optional tasks are already filtered
         const tasksToSubmit: TaskCreate[] = [
-            ...mandatoryTasks.map(content => ({ content, is_optional: false, assigned_score: 10 })),
+            ...mandatoryTasks.filter(t => t.trim().length > 0).map(content => ({ content, is_optional: false, assigned_score: 10 })),
             ...optionalTasks.filter(t => t.trim()).map(content => ({ content, is_optional: true, assigned_score: 5 }))
         ];
 
@@ -173,7 +185,15 @@ export default function PlanTasks() {
                         <span className="text-xs font-bold bg-white px-2 py-1 border-2 border-black shadow-sm">OPTIONAL (MAX 2)</span>
                     </div>
 
-                    <div className="space-y-4">
+                    {!isMandatoryComplete && (
+                        <div className="bg-yellow-100 border-2 border-yellow-400 p-4 mb-4 text-center">
+                            <p className="font-bold text-sm text-yellow-800">
+                                ⚠️ Fill all {quota} required tasks to unlock bonus objectives ({filledMandatoryCount}/{quota} filled)
+                            </p>
+                        </div>
+                    )}
+
+                    <div className={`space-y-4 ${!isMandatoryComplete ? 'opacity-50 pointer-events-none' : ''}`}>
                         {optionalTasks.map((task, index) => (
                             <div key={index} className="flex gap-3 items-center">
                                 <span className="font-black text-2xl w-8 text-gray-500 select-none">+</span>
@@ -183,6 +203,7 @@ export default function PlanTasks() {
                                     onChange={(e) => updateOptionalTask(index, e.target.value)}
                                     className="flex-1 input-neo bg-white/90 text-lg font-bold"
                                     placeholder="Enter bonus task..."
+                                    disabled={!isMandatoryComplete}
                                 />
                             </div>
                         ))}
