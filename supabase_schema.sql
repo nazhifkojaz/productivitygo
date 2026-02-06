@@ -47,7 +47,6 @@ create table tasks (
   is_optional boolean default false,
   is_completed boolean default false,
   proof_url text,
-  assigned_score int default 0, -- Populated when locked
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

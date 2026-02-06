@@ -33,7 +33,6 @@ class Task(TaskBase):
     daily_entry_id: UUID
     is_completed: bool = False
     proof_url: Optional[str] = None
-    assigned_score: int = 0
     created_at: datetime
 
     class Config:
