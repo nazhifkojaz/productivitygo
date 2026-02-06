@@ -11,21 +11,17 @@ CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
 -- Index on email for faster email lookups (used in Battle Station invite lookup)
 CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 
--- Index on avatar_emoji for potential future filtering
-CREATE INDEX IF NOT EXISTS idx_profiles_avatar_emoji ON profiles(avatar_emoji);
+-- NOTE: idx_profiles_avatar_emoji was dropped (item 5.1) - unused, low cardinality
 
 -- ============================================
 -- FOLLOWS TABLE INDEXES
 -- ============================================
 
--- Index on follower_id for "who am I following" queries
-CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+-- NOTE: idx_follows_follower dropped (item 5.3) - covered by PK (follower_id, following_id)
+-- NOTE: idx_follows_composite dropped (item 5.2) - duplicate of PK
 
 -- Index on following_id for "who follows me" queries
 CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
-
--- Composite index for checking if user A follows user B (used in follow/unfollow operations)
-CREATE INDEX IF NOT EXISTS idx_follows_composite ON follows(follower_id, following_id);
 
 -- Index on created_at for sorting followers by recency
 CREATE INDEX IF NOT EXISTS idx_follows_created_at ON follows(created_at);
@@ -55,6 +51,24 @@ CREATE INDEX IF NOT EXISTS idx_battles_user2_status ON battles(user2_id, status)
 
 -- Composite index for battle history queries (user + status + date sorting)
 CREATE INDEX IF NOT EXISTS idx_battles_composite ON battles(user1_id, user2_id, status, end_date DESC);
+
+-- ============================================
+-- DAILY ENTRIES TABLE INDEXES
+-- ============================================
+
+-- Composite index on (user_id, date) - most frequent query pattern (item 4.1)
+CREATE INDEX IF NOT EXISTS idx_daily_entries_user_date ON daily_entries(user_id, date);
+
+-- Index on adventure_id for adventure completion cleanup (item 4.3)
+CREATE INDEX IF NOT EXISTS idx_daily_entries_adventure_id ON daily_entries(adventure_id)
+    WHERE adventure_id IS NOT NULL;
+
+-- ============================================
+-- TASKS TABLE INDEXES
+-- ============================================
+
+-- Index on daily_entry_id foreign key (item 4.4)
+CREATE INDEX IF NOT EXISTS idx_tasks_daily_entry_id ON tasks(daily_entry_id);
 
 -- ============================================
 -- EXPECTED IMPACT
