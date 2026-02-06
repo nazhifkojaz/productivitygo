@@ -28,3 +28,9 @@ export { useFollowers } from './useFollowers';
 export { useFollowing } from './useFollowing';
 export { useUserSearch } from './useUserSearch';
 export { useSocialMutations } from './useSocialMutations';
+
+// Task hooks
+export { useTodayTasks } from './useTodayTasks';
+export { useTaskQuota } from './useTaskQuota';
+export { useTaskDraft } from './useTaskDraft';
+export { useTaskMutations } from './useTaskMutations';

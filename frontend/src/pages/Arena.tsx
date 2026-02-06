@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
@@ -14,7 +14,8 @@ import { useCurrentBattle } from '../hooks/useCurrentBattle';
 import { useProfile } from '../hooks/useProfile';
 import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
-import type { Task } from '../types';
+import { useTodayTasks } from '../hooks/useTodayTasks';
+import { useTaskMutations } from '../hooks/useTaskMutations';
 
 export default function Dashboard() {
     const { session, user } = useAuth();
@@ -23,18 +24,26 @@ export default function Dashboard() {
     const { data: profile } = useProfile();
     const { data: adventure, isLoading: adventureLoading } = useCurrentAdventure();
     const { abandonAdventureMutation, scheduleBreakMutation } = useAdventureMutations();
-    const [tasks, setTasks] = useState<Task[]>([]);
     const [timeUntilBattle, setTimeUntilBattle] = useState<string>('');
 
     // Determine game mode - adventure takes priority if both exist
     const isAdventureMode = !!adventure && !battle;
     const isLoading = battleLoading || adventureLoading;
 
-    useEffect(() => {
-        if (battle) {
-            fetchTasks();
-        }
-    }, [battle]);
+    // Determine if we should show tasks (only during active battle/adventure days)
+    const appState = battle?.app_state || 'IN_BATTLE';
+    const isPreBattle = appState === 'PRE_BATTLE';
+    const isLastDay = appState === 'LAST_BATTLE_DAY';
+    const isPending = appState === 'PENDING_ACCEPTANCE';
+    const shouldShowTasks = !isPreBattle && !isPending;
+
+    // Fetch today's tasks using React Query hook
+    const { data: tasks = [] } = useTodayTasks({
+        enabled: shouldShowTasks && !!battle
+    });
+
+    // Task mutations
+    const { completeTaskMutation } = useTaskMutations();
 
     // Countdown timer for pre-battle
     useEffect(() => {
@@ -48,7 +57,6 @@ export default function Dashboard() {
             const startDateStr = battle.start_date; // e.g., "2025-11-28"
 
             // Create a date string at midnight in the user's timezone
-            // We need to get "YYYY-MM-DD 00:00:00" interpreted in the user's timezone
             const [year, month, day] = startDateStr.split('-').map(Number);
 
             // Get current time in user's timezone to extract offset
@@ -90,55 +98,19 @@ export default function Dashboard() {
         return () => clearInterval(interval);
     }, [battle, profile]);
 
-    const fetchTasks = async () => {
-        if (!battle) return;
-
-        // 2. Get Today's Tasks (Only if IN_BATTLE or LAST_BATTLE_DAY)
-        if (battle.app_state === 'IN_BATTLE' || battle.app_state === 'LAST_BATTLE_DAY') {
-            try {
-                const tasksRes = await axios.get('/api/tasks/today', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
-                setTasks(tasksRes.data);
-            } catch (error) {
-                console.error("Failed to load tasks", error);
-                setTasks([]);
-            }
-        } else {
-            setTasks([]);
-        }
-    };
-
     const toggleTask = async (taskId: string, isCompleted: boolean) => {
-        // Optimistic Update
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: isCompleted } : t));
-
-        try {
-            if (isCompleted) {
-                await axios.post(`/api/tasks/${taskId}/complete`, {}, {
-                    headers: { Authorization: `Bearer ${session?.access_token}` }
-                });
-            } else {
-                // Undo completion (if supported API-wise, currently only complete endpoint exists)
-                // Assuming we can't undo for now or need undo endpoint.
-                // For MVP, let's assume complete is one-way or add undo endpoint later.
-                // Reverting optimistic update if not supported
-                toast.error("Undoing tasks is not yet supported by the protocol.");
-                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !isCompleted } : t));
-            }
-        } catch (error) {
-            console.error("Failed to update task", error);
-            // Revert
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !isCompleted } : t));
+        if (isCompleted) {
+            // React Query handles optimistic updates internally if configured
+            // For now, the mutation will invalidate and refetch
+            await completeTaskMutation.mutateAsync(taskId);
+        } else {
+            // Undo completion (if supported API-wise, currently only complete endpoint exists)
+            toast.error("Undoing tasks is not yet supported by the protocol.");
         }
     };
 
     if (isLoading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">INITIALIZING BATTLEFIELD...</div>;
 
-    const appState = battle?.app_state || 'IN_BATTLE';
-    const isPreBattle = appState === 'PRE_BATTLE';
-    const isLastDay = appState === 'LAST_BATTLE_DAY';
-    const isPending = appState === 'PENDING_ACCEPTANCE';
     const isCreator = battle?.user1_id === user?.id;
 
     const handleAcceptInvite = async () => {

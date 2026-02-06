@@ -1,31 +1,55 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Lock, Star, Save, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { type TaskCreate } from '../api';
+import type { TaskCreate } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
 import { useProfile } from '../hooks/useProfile';
+import { useTaskQuota } from '../hooks/useTaskQuota';
+import { useTaskDraft } from '../hooks/useTaskDraft';
+import { useTaskMutations } from '../hooks/useTaskMutations';
 
 export default function PlanTasks() {
     const navigate = useNavigate();
-    const { session } = useAuth();
     const { data: profile } = useProfile();
     const [mandatoryTasks, setMandatoryTasks] = useState<string[]>([]);
     const [optionalTasks, setOptionalTasks] = useState<string[]>(['', '']);
-    const [quota, setQuota] = useState<number>(0);
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
     const [timeLeft, setTimeLeft] = useState<string>("");
 
     const userTimezone = profile?.timezone || 'UTC';
 
+    // Use React Query hooks for data fetching
+    const { data: quota = 3, isLoading: quotaLoading } = useTaskQuota();
+    const { data: draftTasks = [], isLoading: draftLoading } = useTaskDraft();
+    const { saveDraftMutation, isSaving } = useTaskMutations();
+
+    const loading = quotaLoading || draftLoading;
+
+    // Populate form from draft tasks when data changes
     useEffect(() => {
-        if (session?.access_token) {
-            loadData();
+        if (draftTasks.length === 0) {
+            // No draft tasks, initialize with empty strings
+            const mandatoryFill = new Array(quota).fill('');
+            setMandatoryTasks(mandatoryFill);
+            setOptionalTasks(['', '']);
+            return;
         }
-    }, [session]);
+
+        // Initialize Mandatory tasks from draft
+        const existingMandatory = draftTasks.filter((t: TaskCreate) => !t.is_optional).map((t: TaskCreate) => t.content);
+        const mandatoryFill = new Array(quota).fill('');
+        existingMandatory.forEach((content: string, i: number) => {
+            if (i < quota) mandatoryFill[i] = content;
+        });
+        setMandatoryTasks(mandatoryFill);
+
+        // Initialize Optional tasks from draft
+        const existingOptional = draftTasks.filter((t: TaskCreate) => t.is_optional).map((t: TaskCreate) => t.content);
+        const optionalFill = new Array(2).fill('');
+        existingOptional.forEach((content: string, i: number) => {
+            if (i < 2) optionalFill[i] = content;
+        });
+        setOptionalTasks(optionalFill);
+    }, [draftTasks, quota]);
 
     // Countdown Timer - separate effect to use userTimezone
     useEffect(() => {
@@ -54,49 +78,6 @@ export default function PlanTasks() {
         return () => clearInterval(timer);
     }, [userTimezone]);
 
-    const loadData = async () => {
-        if (!session?.access_token) return;
-        try {
-            // 1. Get Quota
-            const quotaRes = await axios.get('/api/tasks/quota', {
-                headers: { Authorization: `Bearer ${session.access_token}` }
-            });
-            const q = quotaRes.data.quota;
-            setQuota(q);
-
-            // 2. Get Existing Draft
-            const draftRes = await axios.get('/api/tasks/draft', {
-                headers: { Authorization: `Bearer ${session.access_token}` }
-            });
-
-            const existingTasks = draftRes.data;
-
-            // Initialize Mandatory
-            const existingMandatory = existingTasks.filter((t: any) => !t.is_optional).map((t: any) => t.content);
-            const mandatoryFill = new Array(q).fill('');
-            existingMandatory.forEach((content: string, i: number) => {
-                if (i < q) mandatoryFill[i] = content;
-            });
-            setMandatoryTasks(mandatoryFill);
-
-            // Initialize Optional
-            const existingOptional = existingTasks.filter((t: any) => t.is_optional).map((t: any) => t.content);
-            const optionalFill = new Array(2).fill('');
-            existingOptional.forEach((content: string, i: number) => {
-                if (i < 2) optionalFill[i] = content;
-            });
-            setOptionalTasks(optionalFill);
-
-        } catch (error) {
-            console.error("Failed to load data", error);
-            // Fallback if quota fails
-            setQuota(3);
-            setMandatoryTasks(['', '', '']);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const updateMandatoryTask = (index: number, value: string) => {
         const newTasks = [...mandatoryTasks];
         newTasks[index] = value;
@@ -114,24 +95,13 @@ export default function PlanTasks() {
 
     const handleSave = async () => {
         if (!isValid) return;
-        setSubmitting(true);
 
-        try {
-            const tasksToSubmit: TaskCreate[] = [
-                ...mandatoryTasks.map(content => ({ content, is_optional: false })),
-                ...optionalTasks.filter(t => t.trim()).map(content => ({ content, is_optional: true }))
-            ];
+        const tasksToSubmit: TaskCreate[] = [
+            ...mandatoryTasks.map(content => ({ content, is_optional: false, assigned_score: 10 })),
+            ...optionalTasks.filter(t => t.trim()).map(content => ({ content, is_optional: true, assigned_score: 5 }))
+        ];
 
-            await axios.post('/api/tasks/draft', tasksToSubmit, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
-            toast.success("Plan saved successfully! You can edit this until midnight.");
-        } catch (error) {
-            console.error("Failed to save tasks", error);
-            toast.error("Failed to save plan.");
-        } finally {
-            setSubmitting(false);
-        }
+        await saveDraftMutation.mutateAsync(tasksToSubmit);
     };
 
     if (loading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">LOADING PLAN...</div>;
@@ -224,11 +194,11 @@ export default function PlanTasks() {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleSave}
-                    disabled={!isValid || submitting}
+                    disabled={!isValid || isSaving}
                     className="w-full btn-neo bg-neo-primary text-white py-5 text-2xl font-black uppercase tracking-widest shadow-neo hover:translate-x-1 hover:translate-y-1 hover:shadow-none disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                 >
                     <Save className="w-6 h-6" />
-                    {submitting ? 'Saving...' : 'Save Plan'}
+                    {isSaving ? 'Saving...' : 'Save Plan'}
                 </motion.button>
 
                 <p className="text-center text-xs font-bold text-gray-400">
