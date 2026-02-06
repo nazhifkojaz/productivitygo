@@ -23,7 +23,7 @@ export default function Login() {
             setError(error.message);
             setLoading(false);
         } else {
-            navigate('/dashboard');
+            navigate('/lobby');
         }
     };
 
@@ -31,7 +31,7 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}dashboard`,
+                redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}lobby`,
             },
         });
         if (error) setError(error.message);

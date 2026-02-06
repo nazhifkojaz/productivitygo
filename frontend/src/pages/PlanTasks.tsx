@@ -143,7 +143,7 @@ export default function PlanTasks() {
                 <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate('/dashboard')}
+                    onClick={() => navigate('/arena')}
                     className="flex btn-neo px-4 md:px-6 bg-white items-center justify-center"
                 >
                     <ArrowLeft className="w-6 h-6 md:w-8 md:h-8" />

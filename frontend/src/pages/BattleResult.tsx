@@ -42,10 +42,10 @@ export default function BattleResult() {
             });
             // Invalidate cache to ensure Dashboard refetches
             await queryClient.invalidateQueries({ queryKey: ['currentBattle'] });
-            navigate('/dashboard');
+            navigate('/lobby');
         } catch (error) {
             console.error('Failed to leave battle:', error);
-            navigate('/dashboard'); // Navigate anyway
+            navigate('/lobby'); // Navigate anyway
         }
     };
 
@@ -74,7 +74,7 @@ export default function BattleResult() {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
             toast.success("Rematch accepted! Good luck!");
-            navigate('/dashboard');
+            navigate('/lobby');
         } catch (error: any) {
             console.error('Failed to accept rematch:', error);
             toast.error(`Failed to accept rematch: ${error.response?.data?.detail || error.message}`);
@@ -92,7 +92,7 @@ export default function BattleResult() {
             await axios.post(`/api/battles/${battleId}/leave`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
-            navigate('/dashboard');
+            navigate('/lobby');
         } catch (error) {
             toast.error("Failed to decline rematch.");
         }

@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import UserDashboard from './pages/UserDashboard';
+import Arena from './pages/Arena';
+import Lobby from './pages/Lobby';
 import axios from 'axios';
 import PlanTasks from './pages/PlanTasks';
 import Profile from './pages/Profile';
@@ -40,7 +40,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 // Game Session Router - handles both battles and adventures
 type GameSessionState = 'loading' | 'lobby' | 'battle_active' | 'battle_completed' | 'adventure_active' | 'adventure_completed';
 
-const BattleRouter = () => {
+const GameRouter = () => {
   const { session } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
   const [gameState, setGameState] = useState<GameSessionState>('loading');
@@ -115,13 +115,13 @@ const BattleRouter = () => {
     return <Navigate to={`/adventure-result/${sessionId}`} replace />;
   }
 
-  // Active states -> show dashboard
+  // Active states -> show arena
   if (gameState === 'battle_active' || gameState === 'adventure_active') {
-    return <Dashboard />;
+    return <Arena />;
   }
 
   // Lobby state
-  return <UserDashboard />;
+  return <Lobby />;
 };
 
 function App() {
@@ -131,12 +131,18 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><BattleRouter /></ProtectedRoute>} />
+          {/* Smart game router - handles routing based on game state */}
+          <Route path="/lobby" element={<ProtectedRoute><GameRouter /></ProtectedRoute>} />
+          {/* Direct arena access (when user knows they have an active game) */}
+          <Route path="/arena" element={<ProtectedRoute><Arena /></ProtectedRoute>} />
+          {/* Legacy route - redirect to lobby for backwards compatibility */}
+          <Route path="/dashboard" element={<Navigate to="/lobby" replace />} />
           <Route path="/plan" element={<ProtectedRoute><PlanTasks /></ProtectedRoute>} />
           <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
           <Route path="/adventure-result/:adventureId" element={<ProtectedRoute><AdventureResult /></ProtectedRoute>} />
           <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {/* Root redirect */}
+          <Route path="/" element={<Navigate to="/lobby" replace />} />
         </Routes>
         <Toaster position="top-right" richColors closeButton />
       </AuthProvider>

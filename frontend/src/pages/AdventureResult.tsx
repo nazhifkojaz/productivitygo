@@ -172,7 +172,7 @@ export default function AdventureResult() {
             <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/lobby')}
                 className="btn-neo bg-neo-primary text-white py-4 px-8 text-xl font-black uppercase flex items-center gap-2"
             >
                 <Home className="w-6 h-6" /> Return to Lobby

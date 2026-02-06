@@ -20,7 +20,7 @@ import { useBattleMutations } from '../hooks/useBattleMutations';
 import { useMonsters } from '../hooks/useMonsters';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
 
-export default function UserDashboard() {
+export default function Lobby() {
     const { session } = useAuth();
     const navigate = useNavigate();
 
@@ -152,7 +152,7 @@ export default function UserDashboard() {
             setShowMonsterSelect(false);
             // Refetch profile to get current_adventure, then navigate
             await refetchProfile();
-            navigate('/dashboard');
+            navigate('/arena');
         } catch (error: any) {
             console.error("Failed to start adventure", error);
             toast.error(error.response?.data?.detail || "Failed to start adventure");
