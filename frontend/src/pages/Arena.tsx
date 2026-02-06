@@ -48,16 +48,16 @@ export default function Dashboard() {
     // Task mutations
     const { completeTaskMutation } = useTaskMutations();
 
-    // Countdown timer for pre-battle
+    // Countdown timer for pre-battle and pre-adventure
     useEffect(() => {
-        if (!battle || battle.app_state !== 'PRE_BATTLE' || !profile?.timezone) return;
+        if (!isPreBattle || !profile?.timezone) return;
 
         const updateCountdown = () => {
             const now = new Date();
 
             // Parse the start date (YYYY-MM-DD) as midnight in the user's timezone
             const userTimezone = profile.timezone;
-            const startDateStr = battle.start_date; // e.g., "2025-11-28"
+            const startDateStr = isAdventureMode ? adventure!.start_date : battle!.start_date;
 
             // Create a date string at midnight in the user's timezone
             const [year, month, day] = startDateStr.split('-').map(Number);
@@ -99,7 +99,7 @@ export default function Dashboard() {
         const interval = setInterval(updateCountdown, 1000);
 
         return () => clearInterval(interval);
-    }, [battle, profile]);
+    }, [battle, adventure, isAdventureMode, isPreBattle, profile]);
 
     const toggleTask = async (taskId: string, isCompleted: boolean) => {
         if (isCompleted) {
