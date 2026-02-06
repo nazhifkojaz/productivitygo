@@ -89,8 +89,9 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
             if game_mode.value == "pvp" and entry.get("battle_id") == session_id:
                 existing_entry = entry
                 break
-            # TODO: Add adventure check when mode is implemented
-            # elif game_mode.value == "adventure" and entry.get("adventure_id") == session_id:
+            elif game_mode.value == "adventure" and entry.get("adventure_id") == session_id:
+                existing_entry = entry
+                break
 
     if existing_entry:
         entry_id = existing_entry['id']
