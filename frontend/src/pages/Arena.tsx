@@ -31,15 +31,18 @@ export default function Dashboard() {
     const isLoading = battleLoading || adventureLoading;
 
     // Determine if we should show tasks (only during active battle/adventure days)
-    const appState = battle?.app_state || 'IN_BATTLE';
-    const isPreBattle = appState === 'PRE_BATTLE';
-    const isLastDay = appState === 'LAST_BATTLE_DAY';
+    // Derive app_state from adventure when in adventure mode, from battle when in PVP mode
+    const appState = isAdventureMode
+        ? (adventure?.app_state || 'ACTIVE')
+        : (battle?.app_state || 'IN_BATTLE');
+    const isPreBattle = appState === 'PRE_BATTLE' || appState === 'PRE_ADVENTURE';
+    const isLastDay = appState === 'LAST_BATTLE_DAY' || appState === 'LAST_DAY';
     const isPending = appState === 'PENDING_ACCEPTANCE';
     const shouldShowTasks = !isPreBattle && !isPending;
 
     // Fetch today's tasks using React Query hook
     const { data: tasks = [] } = useTodayTasks({
-        enabled: shouldShowTasks && !!battle
+        enabled: shouldShowTasks && (!!battle || !!adventure)
     });
 
     // Task mutations
