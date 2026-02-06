@@ -1,25 +1,25 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Shield, Swords, ArrowLeft, Trophy, Star, Target, X, Loader, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
 import { usePublicProfile } from '../hooks/usePublicProfile';
 import { useSocialMutations } from '../hooks/useSocialMutations';
+import { useChallengeMutations } from '../hooks/useChallengeMutations';
 
 export default function PublicProfile() {
     const { userId } = useParams();
-    const { session, user } = useAuth();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const { data: profile, isLoading: loading } = usePublicProfile(userId);
     const { followMutation, unfollowMutation } = useSocialMutations();
+    const { sendChallengeMutation, isSending: isInviteSending } = useChallengeMutations();
 
     // Challenge Modal State
     const [showChallengeModal, setShowChallengeModal] = useState(false);
     const [startDate, setStartDate] = useState<string | null>(null);
     const [duration, setDuration] = useState(5);
-    const [sendingInvite, setSendingInvite] = useState(false);
 
 
 
@@ -44,37 +44,14 @@ export default function PublicProfile() {
             return;
         }
 
-        setSendingInvite(true);
-        try {
-            await axios.post('/api/invites/send', {
-                rival_id: profile.id,
-                start_date: startDate,
-                duration: duration
-            }, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
+        await sendChallengeMutation.mutateAsync({
+            rivalId: profile.id,
+            startDate: startDate,
+            duration: duration
+        });
 
-            setShowChallengeModal(false);
-            setStartDate(null);
-            toast.success(`Challenge sent to ${profile.username}!`);
-        } catch (error: any) {
-            console.error('Failed to send challenge:', error);
-            console.error('Error response:', error.response?.data);
-
-            // Show detailed error message
-            const errorDetail = error.response?.data?.detail;
-            if (typeof errorDetail === 'string') {
-                toast.error(errorDetail);
-            } else if (Array.isArray(errorDetail)) {
-                // Pydantic validation errors
-                const messages = errorDetail.map((e: any) => `• ${e.msg}`).join('\n');
-                toast.error(`Validation errors:\n${messages}`);
-            } else {
-                toast.error('Failed to send challenge. Please try again.');
-            }
-        } finally {
-            setSendingInvite(false);
-        }
+        setShowChallengeModal(false);
+        setStartDate(null);
     };
 
     // Date Options (Next 7 days)
@@ -241,12 +218,12 @@ export default function PublicProfile() {
                             {/* Send Button */}
                             <button
                                 onClick={handleSendChallenge}
-                                disabled={sendingInvite || !startDate}
-                                className={`w-full py-4 font-black text-lg border-3 border-black shadow-neo transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-2 ${sendingInvite || !startDate ? 'bg-gray-300 cursor-not-allowed' : 'bg-neo-primary hover:bg-green-400'
+                                disabled={isInviteSending || !startDate}
+                                className={`w-full py-4 font-black text-lg border-3 border-black shadow-neo transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-2 ${isInviteSending || !startDate ? 'bg-gray-300 cursor-not-allowed' : 'bg-neo-primary hover:bg-green-400'
                                     }`}
                             >
-                                {sendingInvite ? <Loader className="w-5 h-5 animate-spin" /> : <Swords className="w-5 h-5" />}
-                                {sendingInvite ? 'SENDING...' : 'SEND CHALLENGE'}
+                                {isInviteSending ? <Loader className="w-5 h-5 animate-spin" /> : <Swords className="w-5 h-5" />}
+                                {isInviteSending ? 'SENDING...' : 'SEND CHALLENGE'}
                             </button>
                         </div>
                     </div>

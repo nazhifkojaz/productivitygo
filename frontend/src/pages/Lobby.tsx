@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Swords, Shield, Trophy, Star, Target, Mail, Loader, Users, User, Compass } from 'lucide-react';
@@ -17,11 +15,11 @@ import { useFollowers } from '../hooks/useFollowers';
 import { useUserSearch } from '../hooks/useUserSearch';
 import { useSocialMutations } from '../hooks/useSocialMutations';
 import { useBattleMutations } from '../hooks/useBattleMutations';
+import { useChallengeMutations } from '../hooks/useChallengeMutations';
 import { useMonsters } from '../hooks/useMonsters';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
 
 export default function Lobby() {
-    const { session } = useAuth();
     const navigate = useNavigate();
 
     // React Query hooks - replaces all manual data fetching
@@ -31,6 +29,7 @@ export default function Lobby() {
     const { data: followers = [] } = useFollowers();
     const { followMutation, unfollowMutation } = useSocialMutations();
     const { acceptInviteMutation, rejectInviteMutation } = useBattleMutations();
+    const { sendChallengeByEmailMutation, isSending: isInviteSending } = useChallengeMutations();
 
     // Adventure hooks
     const [showMonsterSelect, setShowMonsterSelect] = useState(false);
@@ -55,8 +54,6 @@ export default function Lobby() {
     const [searchEmail, setSearchEmail] = useState('');
     const [startDate, setStartDate] = useState<string | null>(null);
     const [duration, setDuration] = useState(5);
-    const [loading, setLoading] = useState(false);
-    const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
     const handleFollowToggle = async (userId: string, isCurrentlyFollowing: boolean) => {
         try {
@@ -85,45 +82,13 @@ export default function Lobby() {
             return;
         }
 
-        setLoading(true);
-        try {
-            // Step 1: Look up user by email/username to get their ID
-            const searchResponse = await axios.get(`/api/social/search?q=${searchEmail}`, {
-                headers: { Authorization: `Bearer ${session?.access_token}` }
-            });
+        await sendChallengeByEmailMutation.mutateAsync({
+            emailOrUsername: searchEmail,
+            startDate: startDate,
+            duration: duration
+        });
 
-            // Try to find exact match by email or username
-            let rivalUser = searchResponse.data.find((u: any) =>
-                u.email?.toLowerCase() === searchEmail.toLowerCase() ||
-                u.username?.toLowerCase() === searchEmail.toLowerCase()
-            );
-
-            if (!rivalUser) {
-                toast.error(`User "${searchEmail}" not found in the system.`);
-                setLoading(false);
-                return;
-            }
-
-            // Step 2: Send invite using rival_id
-            await axios.post('/api/invites/send', {
-                rival_id: rivalUser.id,
-                start_date: startDate,
-                duration: duration
-            }, {
-                headers: { Authorization: `Bearer ${session?.access_token} ` }
-            });
-
-            toast.success(`Invite sent to ${rivalUser.username}!`);
-            setInviteStatus(`Invite sent to ${rivalUser.username}!`);
-            setSearchEmail('');
-            // Invites will auto-refresh via React Query
-        } catch (error: any) {
-            console.error('Failed to send invite:', error);
-            const errorDetail = error.response?.data?.detail;
-            toast.error(errorDetail || 'Failed to send invite');
-        } finally {
-            setLoading(false);
-        }
+        setSearchEmail('');
     };
 
     const handleAccept = async (battleId: string) => {
@@ -355,13 +320,12 @@ export default function Lobby() {
 
                                 <button
                                     onClick={handleInvite}
-                                    disabled={loading || !searchEmail || !startDate}
-                                    className={`w-full py-3 font-black border-3 border-black shadow-neo-sm transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-2 ${loading || !searchEmail || !startDate ? 'bg-gray-300 cursor-not-allowed' : 'bg-neo-primary hover:bg-green-400'
+                                    disabled={isInviteSending || !searchEmail || !startDate}
+                                    className={`w-full py-3 font-black border-3 border-black shadow-neo-sm transition-all active:translate-y-1 active:shadow-none flex items-center justify-center gap-2 ${isInviteSending || !searchEmail || !startDate ? 'bg-gray-300 cursor-not-allowed' : 'bg-neo-primary hover:bg-green-400'
                                         }`}
                                 >
-                                    {loading ? <Loader className="w-4 h-4 animate-spin" /> : "SEND INVITE"}
+                                    {isInviteSending ? <Loader className="w-4 h-4 animate-spin" /> : "SEND INVITE"}
                                 </button>
-                                {inviteStatus && <p className="mt-2 text-xs font-bold text-center text-green-600">{inviteStatus}</p>}
                             </div>
                         </div>
                     </div>

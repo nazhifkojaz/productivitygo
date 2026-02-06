@@ -16,6 +16,7 @@ export { useBattleDetails } from './useBattleDetails';
 export { useBattleInvites } from './useBattleInvites';
 export { useBattleMutations } from './useBattleMutations';
 export { usePendingRematch } from './usePendingRematch';
+export { useChallengeMutations } from './useChallengeMutations';
 
 // Adventure hooks
 export { useCurrentAdventure } from './useCurrentAdventure';
