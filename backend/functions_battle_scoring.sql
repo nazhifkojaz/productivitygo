@@ -16,8 +16,6 @@ DECLARE
     v_user1_xp INT;
     v_user2_xp INT;
     v_winner_id UUID;
-    v_user1_completed INT;
-    v_user2_completed INT;
 BEGIN
     -- ===================================================================
     -- TRANSACTION BLOCK
@@ -52,16 +50,8 @@ BEGIN
     JOIN daily_entries de ON de.id = t.daily_entry_id
     WHERE de.user_id = v_user2_id AND de.date = round_date;
 
-    -- Count completed tasks for stat updates
-    SELECT COALESCE(COUNT(*), 0) INTO v_user1_completed
-    FROM tasks t
-    JOIN daily_entries de ON de.id = t.daily_entry_id
-    WHERE de.user_id = v_user1_id AND de.date = round_date AND t.is_completed = true;
-
-    SELECT COALESCE(COUNT(*), 0) INTO v_user2_completed
-    FROM tasks t
-    JOIN daily_entries de ON de.id = t.daily_entry_id
-    WHERE de.user_id = v_user2_id AND de.date = round_date AND t.is_completed = true;
+    -- Note: completed_tasks is now automatically updated by trigger
+    -- (trigger_update_completed_tasks on tasks table)
 
     -- Determine winner
     IF v_user1_xp > v_user2_xp THEN
@@ -81,9 +71,8 @@ BEGIN
     UPDATE daily_entries SET daily_xp = v_user1_xp WHERE user_id = v_user1_id AND date = round_date;
     UPDATE daily_entries SET daily_xp = v_user2_xp WHERE user_id = v_user2_id AND date = round_date;
 
-    -- Update stats (using pre-calculated counts for efficiency)
-    UPDATE profiles SET completed_tasks = completed_tasks + v_user1_completed WHERE id = v_user1_id;
-    UPDATE profiles SET completed_tasks = completed_tasks + v_user2_completed WHERE id = v_user2_id;
+    -- Note: completed_tasks is now automatically updated by trigger
+    -- (trigger_update_completed_tasks on tasks table)
 
     -- Return results
     RETURN QUERY SELECT v_user1_xp, v_user2_xp, v_winner_id;
