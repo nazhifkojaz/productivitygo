@@ -1,5 +1,14 @@
+interface RivalInfo {
+    avatar_emoji?: string;
+    username?: string;
+    level?: number;
+    rank?: string;
+    tasks_completed?: number;
+    tasks_total?: number;
+}
+
 interface RivalRadarProps {
-    battle: any;
+    battle: { rival?: RivalInfo };
 }
 
 /**

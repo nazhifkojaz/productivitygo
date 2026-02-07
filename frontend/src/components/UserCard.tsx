@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import type { SocialUser } from '../types/profile';
 
 interface UserCardProps {
-    user: any;
+    user: SocialUser;
     onViewProfile: () => void;
     isFollowing?: boolean;
     onFollowToggle?: () => Promise<void>;

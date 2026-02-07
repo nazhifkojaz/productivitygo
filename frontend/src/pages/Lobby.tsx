@@ -191,13 +191,45 @@ export default function Lobby() {
                         </div>
                     </div>
 
-                    {/* Match History - placeholder for now, will be populated when API returns match history */}
+                    {/* Match History */}
                     <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
                         <div className="bg-black text-white p-3 border-b-4 border-black">
                             <h3 className="text-sm font-black uppercase font-mono">// RECENT BATTLES</h3>
                         </div>
-                        <div className="p-4 text-center text-gray-400 font-bold text-sm">
-                            No recent battles
+                        <div className="p-4">
+                            {profile?.match_history && profile.match_history.length > 0 ? (
+                                <div className="space-y-2">
+                                    {profile.match_history.slice(0, 5).map((match: any) => (
+                                        <div key={match.id} className="bg-[#E8E4D9] border-3 border-black p-3 flex justify-between items-center shadow-[2px_2px_0_0_#000]">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl">{match.emoji || '⚔️'}</span>
+                                                <div>
+                                                    <div className="font-black text-sm uppercase">
+                                                        {match.type === 'adventure' ? 'VS ' : ''}{match.rival}
+                                                    </div>
+                                                    <div className="text-xs text-gray-600 font-bold">
+                                                        {new Date(match.date).toLocaleDateString()}
+                                                        {match.xp_earned !== undefined && ` • +${match.xp_earned} XP`}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className={`font-black text-sm px-3 py-1 border-2 border-black shadow-[1px_1px_0_0_#000] ${
+                                                match.result === 'WIN' ? 'bg-[#2A9D8F] text-white' :
+                                                match.result === 'LOSS' ? 'bg-[#E63946] text-white' :
+                                                match.result === 'ESCAPED' ? 'bg-[#F4A261] text-white' :
+                                                match.result === 'COMPLETED' ? 'bg-[#457B9D] text-white' :
+                                                'bg-gray-300'
+                                            }`}>
+                                                {match.result}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center text-gray-400 font-bold text-sm py-4">
+                                    No recent battles
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -267,7 +299,7 @@ export default function Lobby() {
                                     </select>
                                 </div>
 
-                                <div>
+                                <div className="pt-3">
                                     <label className="block text-xs font-black uppercase font-mono mb-2">
                                         [ DURATION ]
                                     </label>
@@ -290,7 +322,7 @@ export default function Lobby() {
                             </div>
 
                             {/* Challenge Form */}
-                            <div className="space-y-4">
+                            <div className="space-y-11">
                                 <div>
                                     <label className="block text-xs font-black uppercase font-mono mb-2">
                                         [ CHALLENGE EMAIL ]
@@ -310,7 +342,7 @@ export default function Lobby() {
                                 <button
                                     onClick={handleInvite}
                                     disabled={isInviteSending || !searchEmail || !startDate}
-                                    className={`w-full border-3 border-black p-4 font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2 ${
+                                    className={`w-full border-3 border-black p-3 font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2 ${
                                         isInviteSending || !searchEmail || !startDate
                                             ? 'bg-gray-300 cursor-not-allowed'
                                             : 'bg-[#E63946]'
