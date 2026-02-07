@@ -13,10 +13,10 @@ describe('SecuritySettings', () => {
     };
 
     describe('rendering', () => {
-        it('renders account security header', () => {
+        it('renders settings header', () => {
             render(<SecuritySettings {...defaultProps} />);
 
-            expect(screen.getByText('Account Security')).toBeInTheDocument();
+            expect(screen.getByText('Settings')).toBeInTheDocument();
         });
 
         it('renders change password button initially', () => {
@@ -40,7 +40,7 @@ describe('SecuritySettings', () => {
         it('displays detected timezone', () => {
             render(<SecuritySettings {...defaultProps} detectedTimezone="Europe/London" />);
 
-            expect(screen.getByText('Automatically detected: Europe/London')).toBeInTheDocument();
+            expect(screen.getByText('Detected: Europe/London')).toBeInTheDocument();
         });
 
         it('renders sign out button', () => {
@@ -58,8 +58,8 @@ describe('SecuritySettings', () => {
             const changeButton = screen.getByText('Change Password');
             await user.click(changeButton);
 
-            expect(screen.getByPlaceholderText('New Password')).toBeInTheDocument();
-            expect(screen.getByPlaceholderText('Confirm Password')).toBeInTheDocument();
+            expect(screen.getByPlaceholderText('Enter new password')).toBeInTheDocument();
+            expect(screen.getByPlaceholderText('Confirm new password')).toBeInTheDocument();
         });
 
         it('closes form when cancel clicked', async () => {
@@ -71,7 +71,7 @@ describe('SecuritySettings', () => {
             // Cancel
             await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-            expect(screen.queryByPlaceholderText('New Password')).not.toBeInTheDocument();
+            expect(screen.queryByPlaceholderText('Enter new password')).not.toBeInTheDocument();
         });
 
         it('calls onChangePassword when passwords match and submit clicked', async () => {
@@ -81,13 +81,13 @@ describe('SecuritySettings', () => {
 
             await user.click(screen.getByText('Change Password'));
 
-            const newPasswordInput = screen.getByPlaceholderText('New Password');
-            const confirmPasswordInput = screen.getByPlaceholderText('Confirm Password');
+            const newPasswordInput = screen.getByPlaceholderText('Enter new password');
+            const confirmPasswordInput = screen.getByPlaceholderText('Confirm new password');
 
             await user.type(newPasswordInput, 'newPassword123');
             await user.type(confirmPasswordInput, 'newPassword123');
 
-            const updateButton = screen.getByRole('button', { name: 'Update Password' });
+            const updateButton = screen.getByRole('button', { name: 'Update' });
             await user.click(updateButton);
 
             await waitFor(() => {
@@ -102,13 +102,13 @@ describe('SecuritySettings', () => {
 
             await user.click(screen.getByText('Change Password'));
 
-            const newPasswordInput = screen.getByPlaceholderText('New Password');
-            const confirmPasswordInput = screen.getByPlaceholderText('Confirm Password');
+            const newPasswordInput = screen.getByPlaceholderText('Enter new password');
+            const confirmPasswordInput = screen.getByPlaceholderText('Confirm new password');
 
             await user.type(newPasswordInput, 'newPassword123');
             await user.type(confirmPasswordInput, 'differentPassword');
 
-            const updateButton = screen.getByRole('button', { name: 'Update Password' });
+            const updateButton = screen.getByRole('button', { name: 'Update' });
             await user.click(updateButton);
 
             expect(mockChangePassword).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ describe('SecuritySettings', () => {
             const mockSync = vi.fn().mockResolvedValue(undefined);
             render(<SecuritySettings {...defaultProps} onTimezoneSync={mockSync} detectedTimezone="Asia/Seoul" />);
 
-            const syncButton = screen.getByRole('button', { name: 'Sync to Device' });
+            const syncButton = screen.getByRole('button', { name: 'Sync' });
             await user.click(syncButton);
 
             await waitFor(() => {
@@ -145,7 +145,7 @@ describe('SecuritySettings', () => {
             }));
             render(<SecuritySettings {...defaultProps} onTimezoneSync={mockSync} />);
 
-            const syncButton = screen.getByRole('button', { name: 'Sync to Device' });
+            const syncButton = screen.getByRole('button', { name: 'Sync' });
             await user.click(syncButton);
 
             // Button should be disabled during loading
@@ -179,7 +179,7 @@ describe('SecuritySettings', () => {
             render(<SecuritySettings {...defaultProps} onTimezoneSync={mockSync} />);
 
             // Start loading
-            const syncButton = screen.getByRole('button', { name: 'Sync to Device' });
+            const syncButton = screen.getByRole('button', { name: 'Sync' });
             await user.click(syncButton);
 
             // Password inputs should still be accessible (different loading context)

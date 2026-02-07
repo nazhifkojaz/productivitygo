@@ -17,7 +17,7 @@ describe('ProfileEditForm', () => {
             render(<ProfileEditForm {...defaultProps} />);
 
             expect(screen.getByText('Edit Identity')).toBeInTheDocument();
-            expect(screen.getByLabelText('Username')).toBeInTheDocument();
+            expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
         });
 
         it('does not render when isOpen is false', () => {
@@ -29,7 +29,7 @@ describe('ProfileEditForm', () => {
         it('displays initial username value', () => {
             render(<ProfileEditForm {...defaultProps} initialUsername="challenger123" />);
 
-            const input = screen.getByLabelText('Username');
+            const input = screen.getByLabelText(/username/i);
             expect(input).toHaveValue('challenger123');
         });
 
@@ -48,7 +48,7 @@ describe('ProfileEditForm', () => {
         it('disables input when loading', () => {
             render(<ProfileEditForm {...defaultProps} loading={true} />);
 
-            const input = screen.getByLabelText('Username');
+            const input = screen.getByLabelText(/username/i);
             expect(input).toBeDisabled();
         });
 
@@ -98,7 +98,7 @@ describe('ProfileEditForm', () => {
 
             // Verify the modal div has onClick that stops propagation
             // This is a structural check - the actual behavior is covered by backdrop click test
-            const modal = screen.getByText('Edit Identity').closest('.bg-neo-white');
+            const modal = screen.getByText('Edit Identity').closest('.bg-white');
             expect(modal).toBeInTheDocument();
         });
     });
@@ -113,7 +113,7 @@ describe('ProfileEditForm', () => {
         it('associates label with username input', () => {
             render(<ProfileEditForm {...defaultProps} />);
 
-            expect(screen.getByLabelText('Username')).toBeInTheDocument();
+            expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
         });
     });
 });
