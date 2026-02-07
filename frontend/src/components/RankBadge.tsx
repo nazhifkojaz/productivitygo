@@ -7,6 +7,12 @@ interface RankBadgeProps {
     showLabel?: boolean;
 }
 
+/**
+ * RankBadge component - Design 1 colors
+ *
+ * Uses Design 1 palette (neobrutalist colors) instead of gradients
+ * Maintains 7 rank tiers with icons
+ */
 const RankBadge: React.FC<RankBadgeProps> = ({ rank, level, size = 'medium', showLabel = true }) => {
     const sizeClasses = {
         small: 'px-2 py-1 text-xs',
@@ -14,17 +20,18 @@ const RankBadge: React.FC<RankBadgeProps> = ({ rank, level, size = 'medium', sho
         large: 'px-4 py-2 text-base'
     };
 
-    const rankColors = {
-        'Novice': 'bg-gradient-to-r from-gray-400 to-gray-500 text-white',
-        'Challenger': 'bg-gradient-to-r from-amber-600 to-amber-700 text-white',
-        'Fighter': 'bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800',
-        'Warrior': 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900',
-        'Champion': 'bg-gradient-to-r from-slate-300 to-slate-400 text-gray-900',
-        'Legend': 'bg-gradient-to-r from-cyan-400 to-cyan-500 text-gray-900',
-        'Mythic': 'bg-gradient-to-r from-purple-500 to-pink-500 text-white animate-pulse'
+    // Design 1 rank colors (solid, no gradient)
+    const rankColors: Record<string, { bg: string; text: string }> = {
+        'Novice': { bg: 'bg-gray-300', text: 'text-black' },
+        'Challenger': { bg: 'bg-[#F4A261]', text: 'text-white' },     // orange/yellow
+        'Fighter': { bg: 'bg-[#F4A261]', text: 'text-white' },       // orange/yellow
+        'Warrior': { bg: 'bg-[#457B9D]', text: 'text-white' },        // blue
+        'Champion': { bg: 'bg-[#2A9D8F]', text: 'text-white' },      // teal/green
+        'Legend': { bg: 'bg-[#9D4EDD]', text: 'text-white' },        // purple
+        'Mythic': { bg: 'bg-[#E63946]', text: 'text-white' },       // red
     };
 
-    const rankIcons = {
+    const rankIcons: Record<string, string> = {
         'Novice': '🌱',
         'Challenger': '⚔️',
         'Fighter': '🗡️',
@@ -34,20 +41,24 @@ const RankBadge: React.FC<RankBadgeProps> = ({ rank, level, size = 'medium', sho
         'Mythic': '✨'
     };
 
+    const colors = rankColors[rank] || rankColors['Novice'];
+
     return (
-        <div
+        <span
             className={`
-                inline-flex items-center justify-center gap-1.5 rounded-full font-semibold
+                inline-flex items-center justify-center gap-1.5 font-semibold
                 ${sizeClasses[size]}
-                ${rankColors[rank as keyof typeof rankColors] || rankColors['Novice']}
-                shadow-lg cursor-help transition-transform hover:scale-105
+                ${colors.bg} ${colors.text}
+                border-2 border-black
+                shadow-[3px_3px_0_0_#000]
+                cursor-help
             `}
-            title={rank} // Native tooltip
+            title={rank}
         >
-            {level !== undefined && <span>Level {level}</span>}
-            <span>{rankIcons[rank as keyof typeof rankIcons] || '🌱'}</span>
-            {showLabel && <span>{rank}</span>}
-        </div>
+            {level !== undefined && <span>LVL {level}</span>}
+            <span>{rankIcons[rank] || '🌱'}</span>
+            {showLabel && <span>{rank.toUpperCase()}</span>}
+        </span>
     );
 };
 

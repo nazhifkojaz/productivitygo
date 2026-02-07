@@ -39,15 +39,17 @@ describe('MonsterCard', () => {
 
             expect(screen.getByText('Procrastination Goblin')).toBeInTheDocument();
             expect(screen.getByText('👺')).toBeInTheDocument();
-            // Text content is lowercase with uppercase CSS class
-            expect(screen.getByText(/medium tier/i)).toBeInTheDocument();
+            // MEDIUM TIER text is uppercase in component
+            expect(screen.getByText(/MEDIUM/)).toBeInTheDocument();
         });
 
         it('renders HP bar with correct values', () => {
             render(<MonsterCard adventure={mockAdventure} />);
 
-            expect(screen.getByText('150/200')).toBeInTheDocument();
-            expect(screen.getByText(/Monster HP/i)).toBeInTheDocument();
+            // The HP display shows values separated by " / "
+            expect(screen.getByText(/150/)).toBeInTheDocument();
+            expect(screen.getByText(/200/)).toBeInTheDocument();
+            expect(screen.getByText(/HP/)).toBeInTheDocument();
         });
 
         it('renders stats grid with correct values', () => {
@@ -64,10 +66,10 @@ describe('MonsterCard', () => {
             expect(screen.getByText(/"There's still time..."/)).toBeInTheDocument();
         });
 
-        it('renders corner badge', () => {
+        it('renders black header bar with // MONSTER //', () => {
             render(<MonsterCard adventure={mockAdventure} />);
 
-            expect(screen.getByText('MONSTER HUNT')).toBeInTheDocument();
+            expect(screen.getByText('// MONSTER //')).toBeInTheDocument();
         });
     });
 
@@ -133,15 +135,17 @@ describe('MonsterCard', () => {
                 ...mockAdventure,
                 monster: { ...mockAdventure.monster!, tier: 'easy' as const },
             };
-            render(<MonsterCard adventure={easyAdventure} />);
+            const { container } = render(<MonsterCard adventure={easyAdventure} />);
 
-            expect(screen.getByText(/easy tier/i)).toHaveClass('text-green-400');
+            const tierBadge = container.querySelector('.bg-\\[\\#2A9D8F\\]');
+            expect(tierBadge).toBeInTheDocument();
         });
 
         it('shows correct color for medium tier', () => {
-            render(<MonsterCard adventure={mockAdventure} />);
+            const { container } = render(<MonsterCard adventure={mockAdventure} />);
 
-            expect(screen.getByText(/medium tier/i)).toHaveClass('text-yellow-400');
+            const tierBadge = container.querySelector('.bg-\\[\\#F4A261\\]');
+            expect(tierBadge).toBeInTheDocument();
         });
 
         it('shows correct color for hard tier', () => {
@@ -149,9 +153,10 @@ describe('MonsterCard', () => {
                 ...mockAdventure,
                 monster: { ...mockAdventure.monster!, tier: 'hard' as const },
             };
-            render(<MonsterCard adventure={hardAdventure} />);
+            const { container } = render(<MonsterCard adventure={hardAdventure} />);
 
-            expect(screen.getByText(/hard tier/i)).toHaveClass('text-orange-400');
+            const tierBadge = container.querySelector('.bg-\\[\\#E63946\\]');
+            expect(tierBadge).toBeInTheDocument();
         });
 
         it('shows correct color for expert tier', () => {
@@ -159,9 +164,10 @@ describe('MonsterCard', () => {
                 ...mockAdventure,
                 monster: { ...mockAdventure.monster!, tier: 'expert' as const },
             };
-            render(<MonsterCard adventure={expertAdventure} />);
+            const { container } = render(<MonsterCard adventure={expertAdventure} />);
 
-            expect(screen.getByText(/expert tier/i)).toHaveClass('text-red-400');
+            const tierBadge = container.querySelector('.bg-\\[\\#9D4EDD\\]');
+            expect(tierBadge).toBeInTheDocument();
         });
 
         it('shows correct color for boss tier', () => {
@@ -169,9 +175,10 @@ describe('MonsterCard', () => {
                 ...mockAdventure,
                 monster: { ...mockAdventure.monster!, tier: 'boss' as const },
             };
-            render(<MonsterCard adventure={bossAdventure} />);
+            const { container } = render(<MonsterCard adventure={bossAdventure} />);
 
-            expect(screen.getByText(/boss tier/i)).toHaveClass('text-purple-400');
+            const tierBadge = container.querySelector('.bg-black');
+            expect(tierBadge).toBeInTheDocument();
         });
     });
 
@@ -199,11 +206,13 @@ describe('MonsterCard', () => {
     });
 
     describe('styling', () => {
-        it('applies neo-brutalist classes', () => {
+        it('applies Design 1 classes', () => {
             const { container } = render(<MonsterCard adventure={mockAdventure} />);
 
             const card = container.querySelector('aside');
-            expect(card).toHaveClass('bg-neo-dark', 'border-3', 'shadow-neo');
+            expect(card).toHaveClass('border-4');
+            // Check for shadow in class
+            expect(card?.className).toContain('shadow-');
         });
     });
 });

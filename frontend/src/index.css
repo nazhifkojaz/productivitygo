@@ -1,36 +1,57 @@
 @import "tailwindcss";
+@import "./styles/neo.css";
 
 @theme {
-  --color-neo-bg: #f0f0f0;
-  --color-neo-primary: #FF6B6B;
-  --color-neo-secondary: #4ECDC4;
-  --color-neo-accent: #FFE66D;
-  --color-neo-dark: #2D3436;
+  /* Colors - Design 1 palette */
+  --color-neo-bg: #E8E4D9;
   --color-neo-white: #FFFFFF;
+  --color-neo-black: #000000;
 
-  --shadow-neo: 4px 4px 0px 0px rgba(0, 0, 0, 1);
-  --shadow-neo-sm: 2px 2px 0px 0px rgba(0, 0, 0, 1);
-  --shadow-neo-lg: 8px 8px 0px 0px rgba(0, 0, 0, 1);
+  --color-neo-red: #E63946;
+  --color-neo-yellow: #F4A261;
+  --color-neo-blue: #457B9D;
+  --color-neo-green: #2A9D8F;
+  --color-neo-purple: #9D4EDD;
+  --color-neo-orange: #FB8500;
 
+  /* Shadows - Hard, no blur */
+  --shadow-neo-xs: 2px 2px 0 0 var(--color-neo-black);
+  --shadow-neo-sm: 3px 3px 0 0 var(--color-neo-black);
+  --shadow-neo: 4px 4px 0 0 var(--color-neo-black);
+  --shadow-neo-lg: 6px 6px 0 0 var(--color-neo-black);
+  --shadow-neo-xl: 8px 8px 0 0 var(--color-neo-black);
+
+  /* Border widths */
   --border-width-3: 3px;
+  --border-width-4: 4px;
+  --border-width-5: 5px;
 }
 
 @layer components {
   .btn-neo {
-    @apply px-6 py-2 bg-neo-white border-3 border-black shadow-neo font-bold transition-all active:translate-x-1 active:translate-y-1 active:shadow-none hover:bg-gray-50;
+    @apply px-6 py-3 bg-neo-white border-3 border-black shadow-neo font-bold transition-all;
+  }
+  .btn-neo:hover {
+    @apply translate-x-[2px] translate-y-[2px] shadow-neo-sm;
+  }
+  .btn-neo:active {
+    @apply translate-x-[4px] translate-y-[4px] shadow-none;
   }
 
   .card-neo {
-    @apply bg-neo-white border-3 border-black shadow-neo p-4;
+    @apply bg-neo-white border-4 border-black shadow-neo-lg p-4;
   }
 
   .input-neo {
-    @apply w-full px-4 py-2 border-3 border-black shadow-neo-sm focus:outline-none focus:shadow-neo transition-all;
+    @apply w-full px-4 py-3 border-3 border-black shadow-neo-sm focus:outline-none transition-all;
+  }
+  .input-neo:focus {
+    box-shadow: 4px 4px 0 0 var(--color-neo-blue);
   }
 }
 
 body {
-  @apply bg-neo-bg text-neo-dark font-sans;
+  @apply bg-neo-bg text-neo-black font-sans;
 }
 
 h1,

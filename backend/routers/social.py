@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from database import supabase
 from dependencies import get_current_user
 from utils.logging_config import get_logger
+from utils.rank_calculations import calculate_rank
 
 router = APIRouter(prefix="/social", tags=["social"])
 logger = get_logger(__name__)
@@ -12,6 +13,7 @@ class UserProfile(BaseModel):
     id: str
     username: str
     level: int
+    rank: str = "Novice"
     avatar_url: Optional[str] = None
     avatar_emoji: Optional[str] = '😀'
 
@@ -67,16 +69,18 @@ def get_following(current_user = Depends(get_current_user)):
         # Build response with only needed fields
         result = []
         for profile in profiles.data:
+            level = profile.get('level', 1)
             result.append({
                 'id': profile['id'],
                 'username': profile.get('username', 'Unknown'),
-                'level': profile.get('level', 1),
+                'level': level,
+                'rank': calculate_rank(level, profile.get('battle_count', 0), profile.get('battle_win_count', 0)),
                 'avatar_url': None,
                 'avatar_emoji': profile.get('avatar_emoji', '😀')
             })
-        
+
         return result
-    
+
     try:
         return fetch_following()
     except Exception as e:
@@ -102,10 +106,12 @@ def get_followers(current_user = Depends(get_current_user)):
         # Build response with only needed fields
         result = []
         for profile in profiles.data:
+            level = profile.get('level', 1)
             result.append({
                 'id': profile['id'],
                 'username': profile.get('username', 'Unknown'),
-                'level': profile.get('level', 1),
+                'level': level,
+                'rank': calculate_rank(level, profile.get('battle_count', 0), profile.get('battle_win_count', 0)),
                 'avatar_url': None,
                 'avatar_emoji': profile.get('avatar_emoji', '😀')
             })
@@ -133,12 +139,14 @@ def search_users(q: str, current_user = Depends(get_current_user)):
     # Build response with only needed fields
     result = []
     for profile in profiles.data:
+        level = profile.get('level', 1)
         result.append({
             'id': profile['id'],
             'username': profile.get('username', 'Unknown'),
-            'level': profile.get('level', 1),
+            'level': level,
+            'rank': calculate_rank(level, profile.get('battle_count', 0), profile.get('battle_win_count', 0)),
             'avatar_url': None,
             'avatar_emoji': profile.get('avatar_emoji', '😀')
         })
-        
+
     return result

@@ -85,6 +85,9 @@ ADVENTURE_FULL = """
 # For adventure with embedded monster data
 ADVENTURE_WITH_MONSTER = "*, monster:monsters(id, name, emoji, tier, base_hp, description)"
 
+# For adventure history display
+ADVENTURE_MATCH_HISTORY = "id, monster_id, status, xp_earned, total_damage_dealt, completed_at, duration"
+
 # =============================================================================
 # Monster Table Columns
 # =============================================================================

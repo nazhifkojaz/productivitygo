@@ -10,6 +10,7 @@ export { default as LevelProgress } from './LevelProgress';
 export { default as RankBadge } from './RankBadge';
 export { default as RivalRadar } from './RivalRadar';
 export { default as StatBox } from './StatBox';
+export { default as StatCard } from './StatCard';
 export { default as TabButton } from './TabButton';
 
 // Monster components
@@ -22,6 +23,7 @@ export { default as ProfileEditForm } from './ProfileEditForm';
 export { default as SecuritySettings } from './SecuritySettings';
 
 // User/Social components
+export { default as UserCard } from './UserCard';
 export { default as UserListItem } from './UserListItem';
 
 // Utility components
