@@ -11,7 +11,7 @@ from utils.rank_calculations import (
 )
 from utils.stats import format_win_rate
 from utils.logging_config import get_logger
-from utils.query_columns import PROFILE_PRIVATE, BATTLE_MATCH_HISTORY, PROFILE_TIMEZONE
+from utils.query_columns import PROFILE_PRIVATE, BATTLE_MATCH_HISTORY, PROFILE_TIMEZONE, ADVENTURE_MATCH_HISTORY
 
 router = APIRouter(prefix="/users", tags=["users"])
 logger = get_logger(__name__)
@@ -63,18 +63,11 @@ def get_profile(user = Depends(get_current_user)):
         # Fetch Profile
         response = supabase.table("profiles").select(PROFILE_PRIVATE).eq("id", user.id).single().execute()
         profile = response.data
-        
+
         if not profile:
             raise HTTPException(status_code=404, detail="Profile not found")
 
         # Calculate Stats from Battles
-        # Wins: Count battles where status='completed' and winner_id=user.id (Assuming we have winner_id logic later, for now just count completed as placeholder or 0)
-        # Actually, we don't have winner_id yet. Let's just count 'completed' battles for now as "Battles Played" or similar.
-        # Wait, user asked for "Battles Won". Since we don't have scoring yet, I'll return 0 for now but structure it so it's easy to add.
-
-        # Streak: Count consecutive days of task completion (This requires task history, complex).
-        # For MVP, let's just return 0 placeholders but explicitly in the API so frontend doesn't guess.
-
         battle_count = profile.get('battle_count', 0)
         battle_win_count = profile.get('battle_win_count', 0)
 
@@ -93,7 +86,98 @@ def get_profile(user = Depends(get_current_user)):
             "tasks_completed": profile.get("completed_tasks", 0)
         }
         profile["rank"] = rank
-        
+
+        # Fetch Match History (Last 10 battles - completed only for now)
+        battles_res = supabase.table("battles").select(BATTLE_MATCH_HISTORY)\
+            .or_(f"user1_id.eq.{user.id},user2_id.eq.{user.id}")\
+            .eq("status", "completed")\
+            .order("end_date", desc=True)\
+            .limit(10)\
+            .execute()
+
+        match_history = battles_res.data
+
+        # Collect unique rival IDs
+        rival_ids = set()
+        for battle in match_history:
+            rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
+            rival_ids.add(rival_id)
+
+        # Batch fetch all rivals in single query
+        rivals_map = {}
+        if rival_ids:
+            rivals_res = supabase.table("profiles").select("id, username").in_("id", list(rival_ids)).execute()
+            rivals_map = {r['id']: r['username'] for r in rivals_res.data}
+
+        # Enrich match history with rival names
+        enriched_history = []
+        for battle in match_history:
+            rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
+            rival_name = rivals_map.get(rival_id, "Unknown")
+
+            result = "DRAW"
+            if battle.get('winner_id') == user.id:
+                result = "WIN"
+            elif battle.get('winner_id') == rival_id:
+                result = "LOSS"
+
+            enriched_history.append({
+                "id": battle['id'],
+                "date": battle['end_date'],
+                "rival": rival_name,
+                "result": result,
+                "duration": battle.get('duration', 5),
+                "type": "battle"
+            })
+
+        # Fetch Adventure History (Last 10 completed/escaped adventures)
+        adventures_res = supabase.table("adventures").select(ADVENTURE_MATCH_HISTORY)\
+            .eq("user_id", user.id)\
+            .in_("status", ["completed", "escaped"])\
+            .order("completed_at", desc=True)\
+            .limit(10)\
+            .execute()
+
+        adventure_history = adventures_res.data
+
+        # Batch fetch monsters for adventure history
+        monster_ids = [adv.get('monster_id') for adv in adventure_history if adv.get('monster_id')]
+        monsters_map = {}
+        if monster_ids:
+            monsters_res = supabase.table("monsters").select("id, name, emoji", "tier").in_("id", list(set(monster_ids))).execute()
+            monsters_map = {m['id']: m for m in monsters_res.data}
+
+        # Enrich adventure history
+        enriched_adventures = []
+        for adventure in adventure_history:
+            monster = monsters_map.get(adventure.get('monster_id'), {})
+
+            # Determine result based on status and damage
+            if adventure.get('status') == 'escaped':
+                result = "ESCAPED"
+            elif adventure.get('monster_current_hp', 0) <= 0:
+                result = "WIN"
+            else:
+                result = "COMPLETED"
+
+            enriched_adventures.append({
+                "id": adventure['id'],
+                "date": adventure.get('completed_at'),
+                "rival": monster.get('name', 'Unknown Monster'),
+                "emoji": monster.get('emoji', '👾'),
+                "result": result,
+                "duration": adventure.get('duration', 5),
+                "xp_earned": adventure.get('xp_earned', 0),
+                "type": "adventure"
+            })
+
+        # Combine battle and adventure history, sorted by date
+        combined_history = enriched_history + enriched_adventures
+        combined_history.sort(key=lambda x: x.get('date', ''), reverse=True)
+        combined_history = combined_history[:15]  # Limit to 15 total entries
+
+        profile["match_history"] = combined_history
+
         return profile
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
