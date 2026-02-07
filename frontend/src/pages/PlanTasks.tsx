@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Lock, Star, Save, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import type { TaskCreate } from '../types';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useProfile } from '../hooks/useProfile';
 import { useTaskQuota } from '../hooks/useTaskQuota';
 import { useTaskDraft } from '../hooks/useTaskDraft';
@@ -78,7 +78,7 @@ export default function PlanTasks() {
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-            setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+            setTimeLeft(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
         }, 1000);
 
         return () => clearInterval(timer);
@@ -107,7 +107,6 @@ export default function PlanTasks() {
         if (!isValid) return;
 
         // Filter out empty mandatory tasks before submitting
-        // Empty optional tasks are already filtered
         const tasksToSubmit: TaskCreate[] = [
             ...mandatoryTasks.filter(t => t.trim().length > 0).map(content => ({ content, is_optional: false, assigned_score: 10 })),
             ...optionalTasks.filter(t => t.trim()).map(content => ({ content, is_optional: true, assigned_score: 5 }))
@@ -116,116 +115,151 @@ export default function PlanTasks() {
         await saveDraftMutation.mutateAsync(tasksToSubmit);
     };
 
-    if (loading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">LOADING PLAN...</div>;
+    if (loading) return <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg flex items-center justify-center font-black">LOADING PLAN...</div>;
 
     return (
-        <div className="min-h-screen bg-neo-bg p-4 md:p-8 pb-24 flex flex-col items-center">
+        <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8">
             {/* Header */}
-            <header className="w-full max-w-3xl flex items-stretch gap-4 mb-8">
-                <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate('/arena')}
-                    className="flex btn-neo px-4 md:px-6 bg-white items-center justify-center"
-                >
-                    <ArrowLeft className="w-6 h-6 md:w-8 md:h-8" />
-                </motion.button>
-                <div className="bg-neo-white border-3 border-black p-4 shadow-neo-sm flex-1 text-center md:text-left relative overflow-hidden flex flex-col justify-center">
-                    <div className="absolute top-0 right-0 bg-neo-accent px-2 border-l-3 border-b-3 border-black font-bold text-xs flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {timeLeft}
+            <div className="max-w-3xl mx-auto mb-6">
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000] p-4 flex items-center gap-4">
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => navigate('/arena')}
+                        className="p-3 bg-black text-white border-3 border-black shadow-[3px_3px_0_0_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0_0_#000] transition-all"
+                    >
+                        <ArrowLeft className="w-6 h-6" />
+                    </motion.button>
+
+                    <div className="flex-1">
+                        <h1 className="text-2xl font-black uppercase">Plan Tomorrow</h1>
+                        <p className="text-xs font-mono text-gray-500">// DEFINE YOUR OBJECTIVES</p>
                     </div>
-                    <h1 className="text-2xl font-black italic uppercase">Plan <span className="text-neo-primary">Tomorrow</span></h1>
+
+                    <div className="text-right">
+                        <div className="text-xs font-black uppercase font-mono text-gray-500">LOCKS IN</div>
+                        <div className="font-mono font-black text-lg">{timeLeft}</div>
+                    </div>
                 </div>
-            </header>
+            </div>
 
-            <div className="w-full max-w-3xl space-y-8">
-
+            <div className="max-w-3xl mx-auto space-y-6">
                 {/* Mandatory Tasks */}
-                <section className="bg-neo-white border-3 border-black p-6 md:p-8 shadow-neo relative">
-                    <div className="flex justify-between items-center mb-6 border-b-3 border-black pb-4">
-                        <h2 className="text-xl font-black uppercase flex items-center gap-2">
-                            <Lock className="w-6 h-6" /> Core Objectives
-                        </h2>
-                        <span className="text-xs font-bold bg-neo-accent px-2 py-1 border-2 border-black shadow-sm">REQUIRED ({quota})</span>
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
+                    <div className="bg-black text-white p-4 border-b-4 border-black flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Lock className="w-5 h-5" />
+                            <span className="text-sm font-black uppercase">Core Objectives</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono">{filledMandatoryCount}/{quota} FILLED</span>
+                            <span className="bg-[#F4A261] px-2 py-0.5 text-xs font-black border-2 border-white">+10 XP</span>
+                        </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <AnimatePresence>
-                            {mandatoryTasks.map((task, index) => (
-                                <motion.div
-                                    key={index}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    className="flex gap-3 items-center"
-                                >
-                                    <span className="font-black text-2xl w-8 text-gray-300 select-none">0{index + 1}</span>
+                    <div className="p-6 space-y-3">
+                        {mandatoryTasks.map((task, index) => (
+                            <div key={index} className="flex items-center gap-3">
+                                <span className="text-2xl font-black text-gray-400 w-8 text-center">0{index + 1}</span>
+                                <div className="flex-1 relative">
                                     <input
                                         type="text"
                                         value={task}
                                         onChange={(e) => updateMandatoryTask(index, e.target.value)}
-                                        className="flex-1 input-neo text-lg font-bold"
+                                        className="w-full border-3 border-black p-3 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#E63946] transition-all"
                                         placeholder="Enter critical task..."
                                         autoFocus={index === 0}
                                     />
-                                </motion.div>
-                            ))}
-                        </AnimatePresence>
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-[#F4A261]">+10 XP</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <p className="mt-4 text-xs font-bold text-gray-500 text-center">
-                        * Up to {quota} mandatory tasks available. Fill at least one to save.
-                    </p>
-                </section>
+                </div>
 
                 {/* Optional Tasks */}
-                <section className="bg-neo-secondary border-3 border-black p-6 md:p-8 shadow-neo">
-                    <div className="flex justify-between items-center mb-6 border-b-3 border-black pb-4">
-                        <h2 className="text-xl font-black uppercase flex items-center gap-2">
-                            <Star className="w-6 h-6" /> Bonus Objectives
-                        </h2>
-                        <span className="text-xs font-bold bg-white px-2 py-1 border-2 border-black shadow-sm">OPTIONAL (MAX 2)</span>
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
+                    <div className="bg-[#9D4EDD] text-white p-4 border-b-4 border-black flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Star className="w-5 h-5" />
+                            <span className="text-sm font-black uppercase">Bonus Objectives</span>
+                        </div>
+                        <span className="bg-white px-2 py-0.5 text-xs font-black border-2 border-white text-[#9D4EDD]">+5 XP</span>
                     </div>
 
                     {!isMandatoryComplete && (
-                        <div className="bg-yellow-100 border-2 border-yellow-400 p-4 mb-4 text-center">
-                            <p className="font-bold text-sm text-yellow-800">
+                        <div className="bg-[#F4A261] border-3 border-black p-3 text-center">
+                            <p className="font-bold text-sm">
                                 ⚠️ Fill all {quota} required tasks to unlock bonus objectives ({filledMandatoryCount}/{quota} filled)
                             </p>
                         </div>
                     )}
 
-                    <div className={`space-y-4 ${!isMandatoryComplete ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div className={`p-6 space-y-3 ${!isMandatoryComplete ? 'opacity-50 pointer-events-none' : ''}`}>
                         {optionalTasks.map((task, index) => (
-                            <div key={index} className="flex gap-3 items-center">
-                                <span className="font-black text-2xl w-8 text-gray-500 select-none">+</span>
-                                <input
-                                    type="text"
-                                    value={task}
-                                    onChange={(e) => updateOptionalTask(index, e.target.value)}
-                                    className="flex-1 input-neo bg-white/90 text-lg font-bold"
-                                    placeholder="Enter bonus task..."
-                                    disabled={!isMandatoryComplete}
-                                />
+                            <div key={index} className="flex items-center gap-3">
+                                <span className="text-2xl font-black text-gray-400 w-8 text-center">+</span>
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="text"
+                                        value={task}
+                                        onChange={(e) => updateOptionalTask(index, e.target.value)}
+                                        className="w-full border-3 border-black p-3 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#9D4EDD] transition-all bg-white"
+                                        placeholder="Enter bonus task..."
+                                        disabled={!isMandatoryComplete}
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-[#9D4EDD]">+5 XP</span>
+                                </div>
                             </div>
                         ))}
                     </div>
-                </section>
+                </div>
+
+                {/* Progress Card */}
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000] p-4">
+                    <div className="flex items-center justify-center gap-4">
+                        <div className="text-center">
+                            <div className="text-xs font-mono font-bold text-gray-500">PROGRESS</div>
+                            <div className="text-2xl font-black">{filledMandatoryCount}/{quota} CORE</div>
+                        </div>
+                        <div className="flex-1 h-4 bg-gray-200 border-2 border-black">
+                            <div
+                                className="h-full bg-[#2A9D8F] transition-all"
+                                style={{ width: `${(filledMandatoryCount / quota) * 100}%` }}
+                            />
+                        </div>
+                    </div>
+                </div>
 
                 {/* Save Button */}
                 <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
                     onClick={handleSave}
                     disabled={!isValid || isSaving}
-                    className="w-full btn-neo bg-neo-primary text-white py-5 text-2xl font-black uppercase tracking-widest shadow-neo hover:translate-x-1 hover:translate-y-1 hover:shadow-none disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                    className={`w-full border-3 border-black p-4 font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2 text-lg ${
+                        !isValid || isSaving ? 'bg-gray-300 cursor-not-allowed' : 'bg-[#E63946]'
+                    }`}
                 >
-                    <Save className="w-6 h-6" />
-                    {isSaving ? 'Saving...' : 'Save Plan'}
+                    {isSaving ? (
+                        <>
+                            <Clock className="w-5 h-5 animate-spin" />
+                            SAVING...
+                        </>
+                    ) : (
+                        <>
+                            <Save className="w-5 h-5" />
+                            [ SAVE PLAN ]
+                        </>
+                    )}
                 </motion.button>
 
-                <p className="text-center text-xs font-bold text-gray-400">
-                    Plan auto-locks at midnight.
-                </p>
-
+                {/* Footer */}
+                <div className="text-center">
+                    <p className="text-xs font-mono font-bold text-gray-500">
+                        [ PLAN AUTO-LOCKS AT MIDNIGHT ]
+                    </p>
+                </div>
             </div>
         </div>
     );
