@@ -1,12 +1,9 @@
-import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import confetti from 'canvas-confetti';
 import { Calendar, Home, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import RankBadge from '../components/RankBadge';
 import { useBattleDetails } from '../hooks/useBattleDetails';
 import { usePendingRematch } from '../hooks/usePendingRematch';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,20 +15,6 @@ export default function BattleResult() {
     const { data: battle, isLoading: loading } = useBattleDetails(battleId);
     const { data: pendingRematch } = usePendingRematch(battleId);
 
-    // Trigger confetti on win
-    useEffect(() => {
-        if (battle && battle.winner_id === user?.id) {
-            confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ['#FFD700', '#FFA500', '#FF4500']
-            });
-        }
-    }, [battle, user]);
-
-
-
     const queryClient = useQueryClient();
 
     const handleEndCampaign = async () => {
@@ -40,12 +23,11 @@ export default function BattleResult() {
             await axios.post(`/api/battles/${battleId}/leave`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
-            // Invalidate cache to ensure Dashboard refetches
             await queryClient.invalidateQueries({ queryKey: ['currentBattle'] });
             navigate('/lobby');
         } catch (error) {
             console.error('Failed to leave battle:', error);
-            navigate('/lobby'); // Navigate anyway
+            navigate('/lobby');
         }
     };
 
@@ -54,7 +36,6 @@ export default function BattleResult() {
             await axios.post(`/api/invites/${battleId}/rematch`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
-            // Reload to show pending rematch UI
             window.location.reload();
         } catch (error: any) {
             console.error('Failed to start rematch:', error);
@@ -88,7 +69,6 @@ export default function BattleResult() {
             await axios.post(`/api/invites/${pendingRematch.battle_id}/decline`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
-            // Also leave the battle to clear current_battle
             await axios.post(`/api/battles/${battleId}/leave`, {}, {
                 headers: { Authorization: `Bearer ${session?.access_token}` }
             });
@@ -98,8 +78,8 @@ export default function BattleResult() {
         }
     };
 
-    if (loading) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">CALCULATING RESULTS...</div>;
-    if (!battle) return <div className="min-h-screen bg-neo-bg flex items-center justify-center font-black">RESULT NOT FOUND</div>;
+    if (loading) return <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg flex items-center justify-center font-black">CALCULATING RESULTS...</div>;
+    if (!battle) return <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg flex items-center justify-center font-black">RESULT NOT FOUND</div>;
 
     const isWinner = battle.winner_id === user?.id;
     const isDraw = !battle.winner_id;
@@ -114,131 +94,144 @@ export default function BattleResult() {
     const rivalName = isUser1 ? user2.username : user1.username;
 
     return (
-        <div className="min-h-screen bg-neo-bg p-4 md:p-8 flex flex-col items-center">
-
-            {/* Header / Winner Announcement */}
+        <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8 flex flex-col items-center">
+            {/* Victory Banner */}
             <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="text-center mb-8 mt-8"
+                initial={{ scale: 0.8, opacity: 0, rotate: -5 }}
+                animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                className="w-full max-w-2xl mb-8 mt-8"
             >
-                <div className="inline-block bg-neo-white border-4 border-black p-6 shadow-neo mb-4 rotate-1">
-                    <h1 className="text-4xl md:text-6xl font-black uppercase italic">
-                        {isWinner ? "VICTORY!" : isDraw ? "DRAW!" : "DEFEAT"}
+                <div className={`border-5 border-black p-8 text-center shadow-[8px_8px_0_0_#000] ${isWinner ? 'bg-[#F4A261]' : isDraw ? 'bg-gray-300' : 'bg-gray-400'}`}>
+                    <motion.div
+                        initial={{ y: -20 }}
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ repeat: Infinity, duration: 2, repeatDelay: 1 }}
+                        className="text-6xl mb-4"
+                    >
+                        {isWinner ? '🏆' : isDraw ? '🤝' : '💔'}
+                    </motion.div>
+                    <h1 className="text-5xl md:text-7xl font-black uppercase italic">
+                        {isWinner ? 'VICTORY!' : isDraw ? 'DRAW!' : 'DEFEAT'}
                     </h1>
+                    <p className="text-xl font-bold mt-4">
+                        {isWinner ? 'You dominated the arena!' : isDraw ? 'Evenly matched!' : `Better luck next time against ${rivalName}`}
+                    </p>
                 </div>
-                <p className="text-xl font-bold text-gray-600">
-                    {isWinner ? "You crushed it!" : isDraw ? "Evenly matched!" : `Better luck next time against ${rivalName}.`}
-                </p>
             </motion.div>
 
-            {/* Scoreboard */}
-            <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                {/* My Score */}
-                <div className={`bg-neo-white border-3 border-black p-6 shadow-neo flex flex-col items-center ${isWinner ? 'bg-yellow-100' : ''}`}>
-                    <h2 className="text-2xl font-black mb-2">YOU</h2>
-                    <div className="text-6xl font-black text-neo-primary mb-2">{myScore} XP</div>
-                    {(isUser1 ? user1.rank : user2.rank) && (
-                        <RankBadge
-                            rank={isUser1 ? user1.rank : user2.rank}
-                            level={isUser1 ? user1.level : user2.level}
-                            size="small"
-                            showLabel={false}
-                        />
-                    )}
-                </div>
+            {/* Final Scoreboard */}
+            <div className="w-full max-w-3xl mb-8">
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
+                    <div className="bg-black text-white p-4 border-b-4 border-black text-center">
+                        <h2 className="text-xl font-black uppercase font-mono">// FINAL SCORE //</h2>
+                    </div>
+                    <div className="grid grid-cols-2">
+                        {/* My Score */}
+                        <div className={`p-6 text-center border-r-4 border-black ${isWinner ? 'bg-[#2A9D8F] text-white' : ''}`}>
+                            <div className="text-sm font-black uppercase font-mono mb-2">YOU</div>
+                            <div className="text-6xl font-black">{myScore}</div>
+                            <div className="text-sm font-bold mt-2">TOTAL XP</div>
+                        </div>
 
-                {/* Rival Score */}
-                <div className="bg-neo-secondary border-3 border-black p-6 shadow-neo flex flex-col items-center opacity-90">
-                    <h2 className="text-2xl font-black mb-2">{rivalName.toUpperCase()}</h2>
-                    <div className="text-6xl font-black text-gray-700 mb-2">{rivalScore} XP</div>
-                    {(isUser1 ? user2.rank : user1.rank) && (
-                        <RankBadge
-                            rank={isUser1 ? user2.rank : user1.rank}
-                            level={isUser1 ? user2.level : user1.level}
-                            size="small"
-                            showLabel={false}
-                        />
-                    )}
+                        {/* Rival Score */}
+                        <div className={`p-6 text-center ${!isWinner && !isDraw && myScore !== rivalScore ? 'bg-[#E63946] text-white' : ''}`}>
+                            <div className="text-sm font-black uppercase font-mono mb-2">{rivalName.toUpperCase()}</div>
+                            <div className="text-6xl font-black">{rivalScore}</div>
+                            <div className="text-sm font-bold mt-2">TOTAL XP</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Daily Breakdown */}
-            <div className="w-full max-w-4xl bg-white border-3 border-black p-6 shadow-neo mb-12">
-                <h3 className="text-2xl font-black uppercase mb-6 flex items-center gap-2 border-b-3 border-black pb-2">
-                    <Calendar className="w-6 h-6" /> Battle Log
-                </h3>
+            {/* Battle Log */}
+            <div className="w-full max-w-3xl mb-8">
+                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
+                    <div className="bg-black text-white p-4 border-b-4 border-black">
+                        <h2 className="text-xl font-black uppercase flex items-center gap-2">
+                            <Calendar className="w-6 h-6" /> Battle Log
+                        </h2>
+                    </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="border-b-2 border-black">
-                                <th className="p-3 font-black uppercase">Date</th>
-                                <th className="p-3 font-black uppercase">You (XP)</th>
-                                <th className="p-3 font-black uppercase">{rivalName} (XP)</th>
-                                <th className="p-3 font-black uppercase text-center">Winner</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {battle.daily_breakdown?.map((day: any, i: number) => {
-                                const myDayXp = isUser1 ? day.user1_xp : day.user2_xp;
-                                const rivalDayXp = isUser1 ? day.user2_xp : day.user1_xp;
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="border-b-4 border-black">
+                                    <th className="p-4 font-black uppercase text-sm">DATE</th>
+                                    <th className="p-4 font-black uppercase text-sm">YOU</th>
+                                    <th className="p-4 font-black uppercase text-sm">{rivalName.toUpperCase()}</th>
+                                    <th className="p-4 font-black uppercase text-sm text-center">WINNER</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {battle.daily_breakdown?.map((day: any, i: number) => {
+                                    const myDayXp = isUser1 ? day.user1_xp : day.user2_xp;
+                                    const rivalDayXp = isUser1 ? day.user2_xp : day.user1_xp;
 
-                                return (
-                                    <tr key={i} className="border-b border-gray-200 hover:bg-gray-50 font-bold">
-                                        <td className="p-3">{day.date}</td>
-                                        <td className="p-3 text-neo-primary">{myDayXp}</td>
-                                        <td className="p-3 text-gray-600">{rivalDayXp}</td>
-                                        <td className="p-3 text-center">
-                                            {day.winner_id === user?.id ? (
-                                                <span className="bg-yellow-300 text-black px-2 py-1 text-xs border border-black shadow-sm">WIN</span>
-                                            ) : day.winner_id ? (
-                                                <span className="bg-gray-200 text-gray-500 px-2 py-1 text-xs">LOSS</span>
-                                            ) : (
-                                                <span className="bg-white text-black px-2 py-1 text-xs border border-black">DRAW</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                    return (
+                                        <tr key={i} className="border-b-2 border-black">
+                                            <td className="p-4 font-bold">{day.date}</td>
+                                            <td className={`p-4 font-black ${myDayXp > rivalDayXp ? 'text-[#2A9D8F]' : ''}`}>{myDayXp}</td>
+                                            <td className={`p-4 font-black ${rivalDayXp > myDayXp ? 'text-[#E63946]' : ''}`}>{rivalDayXp}</td>
+                                            <td className="p-4 text-center">
+                                                {day.winner_id === user?.id ? (
+                                                    <span className="bg-[#2A9D8F] text-white px-3 py-1 text-xs font-black border-2 border-black">WIN</span>
+                                                ) : day.winner_id ? (
+                                                    <span className="bg-[#E63946] text-white px-3 py-1 text-xs font-black border-2 border-black">LOSS</span>
+                                                ) : (
+                                                    <span className="bg-gray-300 text-black px-3 py-1 text-xs font-black border-2 border-black">DRAW</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* XP Earned */}
+            <div className="w-full max-w-3xl mb-8">
+                <div className="bg-[#F4A261] border-4 border-black shadow-[6px_6px_0_0_#000] p-6 flex items-center justify-between">
+                    <div>
+                        <div className="text-sm font-black uppercase font-mono">XP EARNED</div>
+                        <div className="text-4xl font-black">+{myScore}</div>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-sm font-black uppercase font-mono">NEW LEVEL</div>
+                        <div className="text-2xl font-black">{(isUser1 ? user1.level : user2.level) + 1} ↗</div>
+                    </div>
                 </div>
             </div>
 
             {/* Actions */}
-            <div className="w-full max-w-2xl mb-12">
+            <div className="w-full max-w-3xl flex flex-col md:flex-row gap-4 mb-12">
                 {pendingRematch?.exists ? (
-                    // Rematch request exists
                     pendingRematch.is_requester ? (
-                        // User sent rematch request -> Waiting for rival
-                        <div className="bg-blue-100 border-3 border-black p-6 text-center shadow-neo">
+                        <div className="w-full bg-blue-100 border-4 border-black p-6 text-center shadow-[4px_4px_0_0_#000]">
                             <h3 className="text-xl font-black uppercase mb-2">⏳ Waiting for Rival</h3>
                             <p className="font-bold mb-4">Your rival is reviewing the rematch request...</p>
-                            <div className="flex flex-col md:flex-row gap-4">
-                                <button
-                                    onClick={() => handleDeclineRematch()}
-                                    className="flex-1 btn-neo bg-white text-black py-4 text-xl font-black uppercase flex items-center justify-center gap-2 hover:bg-gray-100"
-                                >
-                                    <Home className="w-6 h-6" /> Cancel & Return to Lobby
-                                </button>
-                            </div>
+                            <button
+                                onClick={handleDeclineRematch}
+                                className="w-full bg-white border-3 border-black p-4 text-xl font-black uppercase shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
+                            >
+                                <Home className="w-6 h-6" /> Cancel & Return to Lobby
+                            </button>
                         </div>
                     ) : (
-                        // User received rematch request -> Accept or Decline
-                        <div className="bg-green-100 border-3 border-black p-6 text-center shadow-neo">
-                            <h3 className="text-xl font-black uppercase mb-2">🔥 Rematch Request!</h3>
-                            <p className="font-bold mb-4">Your rival wants a rematch! What's your call?</p>
+                        <div className="w-full bg-[#2A9D8F] border-4 border-black p-6 text-center shadow-[4px_4px_0_0_#000]">
+                            <h3 className="text-xl font-black uppercase mb-2 text-white">🔥 Rematch Request!</h3>
+                            <p className="font-bold mb-4 text-white">Your rival wants a rematch! What's your call?</p>
                             <div className="flex flex-col md:flex-row gap-4">
                                 <button
                                     onClick={handleAcceptRematch}
-                                    className="flex-1 btn-neo bg-neo-primary text-white py-4 text-xl font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600"
+                                    className="flex-1 bg-white border-3 border-black p-4 text-xl font-black uppercase shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
                                 >
                                     <RefreshCw className="w-6 h-6" /> Accept Rematch
                                 </button>
                                 <button
                                     onClick={handleDeclineRematch}
-                                    className="flex-1 btn-neo bg-red-500 text-white py-4 text-xl font-black uppercase flex items-center justify-center gap-2 hover:bg-red-600"
+                                    className="flex-1 bg-[#E63946] border-3 border-black p-4 text-xl font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
                                 >
                                     <Home className="w-6 h-6" /> Decline & End Campaign
                                 </button>
@@ -246,25 +239,27 @@ export default function BattleResult() {
                         </div>
                     )
                 ) : (
-                    // No rematch request -> Show original buttons
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <button
+                    <>
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={handleEndCampaign}
-                            className="flex-1 btn-neo bg-white text-black py-4 text-xl font-black uppercase flex items-center justify-center gap-2 hover:bg-gray-100"
+                            className="flex-1 bg-white border-4 border-black p-6 text-xl font-black uppercase shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
                         >
-                            <Home className="w-6 h-6" /> End Campaign
-                        </button>
+                            <Home className="w-6 h-6" /> Return to Lobby
+                        </motion.button>
 
-                        <button
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={handleRematch}
-                            className="flex-1 btn-neo bg-neo-primary text-white py-4 text-xl font-black uppercase flex items-center justify-center gap-2 hover:bg-blue-600"
+                            className="flex-1 bg-[#E63946] border-4 border-black p-6 text-xl font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
                         >
-                            <RefreshCw className="w-6 h-6" /> Continue Battle
-                        </button>
-                    </div>
+                            <RefreshCw className="w-6 h-6" /> Rematch
+                        </motion.button>
+                    </>
                 )}
             </div>
-
         </div>
     );
 }
