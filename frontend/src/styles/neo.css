@@ -1,0 +1,190 @@
+/* NeoBrutalist Design System */
+@theme {
+  /* Colors - High contrast, raw palette */
+  --color-neo-bg: #E8E4D9;
+  --color-neo-white: #FFFFFF;
+  --color-neo-black: #000000;
+
+  --color-neo-red: #E63946;
+  --color-neo-yellow: #F4A261;
+  --color-neo-blue: #457B9D;
+  --color-neo-green: #2A9D8F;
+  --color-neo-purple: #9D4EDD;
+  --color-neo-orange: #FB8500;
+
+  /* Typography */
+  --font-neo-display: 'Helvetica Neue', 'Inter', sans-serif;
+  --font-neo-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+  /* Shadows - Hard, no blur */
+  --shadow-neo-xs: 2px 2px 0 0 var(--color-neo-black);
+  --shadow-neo-sm: 3px 3px 0 0 var(--color-neo-black);
+  --shadow-neo: 4px 4px 0 0 var(--color-neo-black);
+  --shadow-neo-lg: 6px 6px 0 0 var(--color-neo-black);
+  --shadow-neo-xl: 8px 8px 0 0 var(--color-neo-black);
+
+  /* Border widths */
+  --border-2: 2px solid var(--color-neo-black);
+  --border-3: 3px solid var(--color-neo-black);
+  --border-4: 4px solid var(--color-neo-black);
+  --border-5: 5px solid var(--color-neo-black);
+}
+
+/* Base styles */
+.neo-text-display {
+  font-family: var(--font-neo-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.neo-text-mono {
+  font-family: var(--font-neo-mono);
+  font-weight: 500;
+}
+
+/* Card styles */
+.neo-card {
+  background: var(--color-neo-white);
+  border: var(--border-4);
+  box-shadow: var(--shadow-neo);
+}
+
+.neo-card-elevated {
+  background: var(--color-neo-white);
+  border: var(--border-5);
+  box-shadow: var(--shadow-neo-lg);
+}
+
+/* Button styles */
+.neo-btn {
+  background: var(--color-neo-black);
+  color: var(--color-neo-white);
+  border: var(--border-3);
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: var(--shadow-neo-sm);
+  transition: all 0.1s ease;
+  cursor: pointer;
+}
+
+.neo-btn:hover {
+  transform: translate(1px, 1px);
+  box-shadow: var(--shadow-neo-xs);
+}
+
+.neo-btn:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.neo-btn-primary {
+  background: var(--color-neo-red);
+}
+
+.neo-btn-secondary {
+  background: var(--color-neo-blue);
+}
+
+.neo-btn-accent {
+  background: var(--color-neo-yellow);
+  color: var(--color-neo-black);
+}
+
+.neo-btn-green {
+  background: var(--color-neo-green);
+}
+
+/* Input styles */
+.neo-input {
+  background: var(--color-neo-white);
+  border: var(--border-3);
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  outline: none;
+  transition: all 0.1s ease;
+}
+
+.neo-input:focus {
+  box-shadow: 4px 4px 0 0 var(--color-neo-blue);
+}
+
+/* Grid pattern overlay */
+.neo-grid-bg {
+  background-image:
+    linear-gradient(var(--color-neo-black) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-neo-black) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+}
+
+/* Marquee animation */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.neo-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+/* Glitch effect */
+@keyframes glitch {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+}
+
+.neo-glitch:hover {
+  animation: glitch 0.3s ease infinite;
+}
+
+/* Badge styles */
+.neo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: var(--border-2);
+  background: var(--color-neo-yellow);
+}
+
+/* Section divider */
+.neo-divider {
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--color-neo-black) 0px,
+    var(--color-neo-black) 10px,
+    transparent 10px,
+    transparent 20px
+  );
+}
+
+/* Striped background */
+.neo-striped {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(0, 0, 0, 0.03) 10px,
+    rgba(0, 0, 0, 0.03) 20px
+  );
+}
+
+/* Utility classes */
+.neo-border-dashed {
+  border-style: dashed !important;
+}
+
+.neo-rotate-1 { transform: rotate(-1deg); }
+.neo-rotate-2 { transform: rotate(-2deg); }
+.neo-rotate-1-pos { transform: rotate(1deg); }
+.neo-rotate-2-pos { transform: rotate(2deg); }
