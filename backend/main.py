@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from database import supabase
+from database import supabase, init_supabase, init_db_pool
 from routers import tasks, battles, users, social, invites, adventures
 from scheduler import start_scheduler, shutdown_scheduler
 import os
@@ -60,7 +60,9 @@ app.include_router(adventures.router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
-    """Start background scheduler on app startup"""
+    """Initialize async Supabase client and start background scheduler"""
+    await init_supabase()
+    await init_db_pool()
     start_scheduler()
 
 @app.on_event("shutdown")
@@ -77,10 +79,10 @@ def health_check():
     return {"status": "healthy"}
 
 @app.get("/db-health")
-def db_health_check():
+async def db_health_check():
     try:
         # Simple query to check connection (fetching 1 profile)
-        response = supabase.table("profiles").select("count", count="exact").limit(1).execute()
+        response = await supabase.table("profiles").select("count", count="exact").limit(1).execute()
         return {"status": "connected", "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
