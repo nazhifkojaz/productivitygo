@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from utils.enums import GameMode
 
 
-def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
+async def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
     """
     Get the active game session for a user.
 
@@ -32,7 +32,7 @@ def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
         HTTPException: If no active game session is found (400)
 
     Examples:
-        >>> session_id, mode = get_active_game_session("user-123")
+        >>> session_id, mode = await get_active_game_session("user-123")
         >>> print(f"Active session: {mode.value} - {session_id}")
         Active session: pvp - battle-456
 
@@ -41,7 +41,7 @@ def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
         (though a user should only have one active session at a time).
     """
     # 1. Check for active PVP battle
-    battle_res = supabase.table("battles").select("id")\
+    battle_res = await supabase.table("battles").select("id")\
         .or_(f"user1_id.eq.{user_id},user2_id.eq.{user_id}")\
         .eq("status", "active")\
         .maybe_single().execute()
@@ -50,7 +50,7 @@ def get_active_game_session(user_id: str) -> Tuple[str, GameMode]:
         return battle_res.data['id'], GameMode.PVP
 
     # 2. Check for active adventure
-    adventure_res = supabase.table("adventures").select("id")\
+    adventure_res = await supabase.table("adventures").select("id")\
         .eq("user_id", user_id)\
         .eq("status", "active")\
         .maybe_single().execute()
@@ -97,7 +97,7 @@ def get_daily_entry_key(session_id: str, game_mode: GameMode) -> dict:
         raise ValueError(f"Unknown game mode: {game_mode}")
 
 
-def has_active_game_session(user_id: str) -> bool:
+async def has_active_game_session(user_id: str) -> bool:
     """
     Check if user has any active game session without raising an exception.
 
@@ -111,11 +111,11 @@ def has_active_game_session(user_id: str) -> bool:
         True if user has an active battle or adventure, False otherwise
 
     Examples:
-        >>> if has_active_game_session("user-123"):
-        ...     session_id, mode = get_active_game_session("user-123")
+        >>> if await has_active_game_session("user-123"):
+        ...     session_id, mode = await get_active_game_session("user-123")
     """
     try:
-        get_active_game_session(user_id)
+        await get_active_game_session(user_id)
         return True
     except HTTPException:
         return False

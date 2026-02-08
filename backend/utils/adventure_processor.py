@@ -36,7 +36,7 @@ def get_local_date(tz_str: str) -> date:
         return datetime.now(pytz.utc).date()
 
 
-def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
+async def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
     """
     Process pending rounds for an adventure.
 
@@ -59,7 +59,7 @@ def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
 
     # Get user timezone
     user_id = adventure['user_id']
-    profile_res = supabase.table("profiles").select("timezone")\
+    profile_res = await supabase.table("profiles").select("timezone")\
         .eq("id", user_id).single().execute()
 
     user_tz = "UTC"
@@ -82,7 +82,7 @@ def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
             if user_today > break_end_date:
                 # Clear break status - break has ended
                 logger.info(f"Clearing break status for adventure {adventure_id}")
-                supabase.table("adventures").update({
+                await supabase.table("adventures").update({
                     "is_on_break": False,
                     "break_end_date": None
                 }).eq("id", adventure_id).execute()
@@ -93,7 +93,7 @@ def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
         else:
             # Break flag set but no end date - clear it
             logger.warning(f"Adventure {adventure_id} has is_on_break=True but no break_end_date, clearing")
-            supabase.table("adventures").update({
+            await supabase.table("adventures").update({
                 "is_on_break": False,
                 "break_end_date": None
             }).eq("id", adventure_id).execute()
@@ -113,7 +113,7 @@ def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
         logger.debug(f"Processing round {day_offset + 1} for adventure {adventure_id} (Date: {round_date})")
 
         try:
-            result = supabase.rpc("calculate_adventure_round", {
+            result = await supabase.rpc("calculate_adventure_round", {
                 "adventure_uuid": adventure_id,
                 "round_date": round_date.isoformat()
             }).execute()
@@ -140,29 +140,29 @@ def process_adventure_rounds(adventure: Dict[str, Any]) -> int:
     # Check for victory/defeat conditions after processing rounds
     if rounds_processed > 0:
         # Reload adventure to get updated HP
-        updated = supabase.table("adventures").select("monster_current_hp, status")\
+        updated = await supabase.table("adventures").select("monster_current_hp, status")\
             .eq("id", adventure_id).single().execute()
 
         if updated.data:
             # Check victory (HP <= 0)
             if updated.data['monster_current_hp'] <= 0:
                 logger.info(f"Adventure {adventure_id} - Monster defeated!")
-                complete_adventure(adventure_id)
+                await complete_adventure(adventure_id)
 
     # Check deadline (escape) - monster escapes if deadline passed
     if user_today > deadline:
         # Reload to ensure we have current status
-        status_check = supabase.table("adventures").select("status")\
+        status_check = await supabase.table("adventures").select("status")\
             .eq("id", adventure_id).single().execute()
 
         if status_check.data and status_check.data['status'] == 'active':
             logger.info(f"Adventure {adventure_id} - Deadline passed, monster escaped")
-            complete_adventure(adventure_id)
+            await complete_adventure(adventure_id)
 
     return rounds_processed
 
 
-def complete_adventure(adventure_id: str) -> Optional[Dict[str, Any]]:
+async def complete_adventure(adventure_id: str) -> Optional[Dict[str, Any]]:
     """
     Complete an adventure using the SQL function.
 
@@ -179,7 +179,7 @@ def complete_adventure(adventure_id: str) -> Optional[Dict[str, Any]]:
         Completion data dict with victory status and XP earned, or None if failed
     """
     try:
-        result = supabase.rpc("complete_adventure", {
+        result = await supabase.rpc("complete_adventure", {
             "adventure_uuid": adventure_id
         }).execute()
 
