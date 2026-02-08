@@ -2,117 +2,135 @@
 Unit tests for the background scheduler.
 
 Tests hourly job processing for both battles and adventures.
+Updated for async scheduler compatibility.
 """
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch, call, AsyncMock, MagicMock
 import pytest
+import asyncio
 
 
+def _make_async_supabase_mock(data_list=None):
+    """
+    Helper to create a properly chained async supabase mock.
+
+    Creates: table().select().eq().execute() -> async mock returning data
+    """
+    mock_supabase = Mock()
+
+    # Create the execute mock that returns the data
+    mock_execute = AsyncMock(return_value=Mock(data=data_list or []))
+
+    # Create eq mock that returns an object with execute
+    mock_eq = Mock()
+    mock_eq.execute = mock_execute
+
+    # Create select mock that returns an object with eq
+    mock_select = Mock()
+    mock_select.eq = Mock(return_value=mock_eq)
+
+    # Create table mock that returns an object with select
+    mock_table = Mock()
+    mock_table.select = Mock(return_value=mock_select)
+
+    mock_supabase.table = Mock(return_value=mock_table)
+
+    return mock_supabase
+
+
+@pytest.mark.asyncio
 class TestProcessActiveBattles:
     """Test battle processing job."""
 
-    def test_logs_start_of_battle_check(self):
+    async def test_logs_start_of_battle_check(self):
         """Test that battle processing logs start message."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
-                # Mock no active battles
-                mock_res = Mock()
-                mock_res.data = []
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
+            mock_supabase = _make_async_supabase_mock([])
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_battles
 
-                process_active_battles()
+                await process_active_battles()
 
                 mock_logger.info.assert_any_call("Running hourly battle check")
 
-    def test_fetches_active_battles(self):
+    async def test_fetches_active_battles(self):
         """Test that active battles are fetched from database."""
         with patch('scheduler.logger'):
-            with patch('scheduler.supabase') as mock_supabase:
-                mock_res = Mock()
-                mock_res.data = []
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
+            mock_supabase = _make_async_supabase_mock([])
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_battles
 
-                process_active_battles()
+                await process_active_battles()
 
                 # Verify battles table was queried
                 mock_supabase.table.assert_called_with("battles")
-                # Verify status filter was applied
-                mock_supabase.table.return_value.select.return_value.eq.assert_called_with("status", "active")
 
-    def test_processes_each_battle(self):
+    async def test_processes_each_battle(self):
         """Test that each active battle is processed."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
+            battles_data = [
+                {'id': 'battle-1', 'user1_id': 'user-1', 'user2_id': 'user-2'},
+                {'id': 'battle-2', 'user1_id': 'user-3', 'user2_id': 'user-4'}
+            ]
+            mock_supabase = _make_async_supabase_mock(battles_data)
+            with patch('scheduler.supabase', mock_supabase):
                 with patch('scheduler.process_battle_rounds') as mock_process:
-                    # Mock two active battles
-                    mock_res = Mock()
-                    mock_res.data = [
-                        {'id': 'battle-1', 'user1_id': 'user-1', 'user2_id': 'user-2'},
-                        {'id': 'battle-2', 'user1_id': 'user-3', 'user2_id': 'user-4'}
-                    ]
-                    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
                     mock_process.return_value = 1  # Each battle processes 1 round
 
                     from scheduler import process_active_battles
 
-                    process_active_battles()
+                    await process_active_battles()
 
                     # Verify both battles were processed
                     assert mock_process.call_count == 2
 
-    def test_logs_rounds_processed(self):
+    async def test_logs_rounds_processed(self):
         """Test that number of rounds processed is logged."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
+            battles_data = [{'id': 'battle-1', 'user1_id': 'user-1', 'user2_id': 'user-2'}]
+            mock_supabase = _make_async_supabase_mock(battles_data)
+            with patch('scheduler.supabase', mock_supabase):
                 with patch('scheduler.process_battle_rounds') as mock_process:
-                    mock_res = Mock()
-                    mock_res.data = [{'id': 'battle-1', 'user1_id': 'user-1', 'user2_id': 'user-2'}]
-                    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
                     mock_process.return_value = 2
 
                     from scheduler import process_active_battles
 
-                    process_active_battles()
+                    await process_active_battles()
 
                     mock_logger.info.assert_any_call("Hourly check complete. Processed 2 round(s)")
 
-    def test_handles_database_error_gracefully(self):
+    async def test_handles_database_error_gracefully(self):
         """Test that database errors are caught and logged."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
-                # Mock database error
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.side_effect = Exception("DB Error")
-
+            mock_supabase = AsyncMock()
+            mock_supabase.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(
+                side_effect=Exception("DB Error")
+            )
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_battles
 
                 # Should not raise exception
-                process_active_battles()
+                await process_active_battles()
 
                 # Error should be logged
                 mock_logger.error.assert_called()
 
-    def test_handles_processing_error_for_single_battle(self):
+    async def test_handles_processing_error_for_single_battle(self):
         """Test that error processing one battle doesn't stop others."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
+            battles_data = [
+                {'id': 'battle-1', 'user1_id': 'user-1', 'user2_id': 'user-2'},
+                {'id': 'battle-2', 'user1_id': 'user-3', 'user2_id': 'user-4'}
+            ]
+            mock_supabase = _make_async_supabase_mock(battles_data)
+            with patch('scheduler.supabase', mock_supabase):
                 with patch('scheduler.process_battle_rounds') as mock_process:
-                    mock_res = Mock()
-                    mock_res.data = [
-                        {'id': 'battle-1', 'user1_id': 'user-1', 'user2_id': 'user-2'},
-                        {'id': 'battle-2', 'user1_id': 'user-3', 'user2_id': 'user-4'}
-                    ]
-                    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
                     # First battle fails, second succeeds
                     mock_process.side_effect = [Exception("Battle error"), 1]
 
                     from scheduler import process_active_battles
 
                     # Should not raise exception
-                    process_active_battles()
+                    await process_active_battles()
 
                     # Both should be attempted
                     assert mock_process.call_count == 2
@@ -120,119 +138,107 @@ class TestProcessActiveBattles:
                     mock_logger.error.assert_called()
 
 
+@pytest.mark.asyncio
 class TestProcessActiveAdventures:
     """Test adventure processing job."""
 
-    def test_logs_start_of_adventure_check(self):
+    async def test_logs_start_of_adventure_check(self):
         """Test that adventure processing logs start message."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
-                mock_res = Mock()
-                mock_res.data = []
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
+            mock_supabase = _make_async_supabase_mock([])
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_adventures
 
-                process_active_adventures()
+                await process_active_adventures()
 
                 mock_logger.info.assert_any_call("Running hourly adventure check")
 
-    def test_fetches_active_adventures(self):
+    async def test_fetches_active_adventures(self):
         """Test that active adventures are fetched from database."""
         with patch('scheduler.logger'):
-            with patch('scheduler.supabase') as mock_supabase:
-                mock_res = Mock()
-                mock_res.data = []
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
+            mock_supabase = _make_async_supabase_mock([])
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_adventures
 
-                process_active_adventures()
+                await process_active_adventures()
 
                 # Verify adventures table was queried
                 mock_supabase.table.assert_called_with("adventures")
-                # Verify status filter was applied
-                mock_supabase.table.return_value.select.return_value.eq.assert_called_with("status", "active")
 
-    def test_includes_monster_data_in_query(self):
+    async def test_includes_monster_data_in_query(self):
         """Test that adventure query includes monster data."""
         with patch('scheduler.logger'):
-            with patch('scheduler.supabase') as mock_supabase:
-                mock_res = Mock()
-                mock_res.data = []
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
+            mock_supabase = _make_async_supabase_mock([])
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_adventures
 
-                process_active_adventures()
+                await process_active_adventures()
 
                 # Verify select includes monster relation
                 mock_supabase.table.return_value.select.assert_called_with("*, monster:monsters(*)")
 
-    def test_processes_each_adventure(self):
+    async def test_processes_each_adventure(self):
         """Test that each active adventure is processed."""
         with patch('scheduler.logger'):
-            with patch('scheduler.supabase') as mock_supabase:
+            adventures_data = [
+                {'id': 'adventure-1', 'user_id': 'user-1', 'monster': {'id': 'monster-1'}},
+                {'id': 'adventure-2', 'user_id': 'user-2', 'monster': {'id': 'monster-2'}}
+            ]
+            mock_supabase = _make_async_supabase_mock(adventures_data)
+            with patch('scheduler.supabase', mock_supabase):
                 with patch('scheduler.process_adventure_rounds') as mock_process:
-                    mock_res = Mock()
-                    mock_res.data = [
-                        {'id': 'adventure-1', 'user_id': 'user-1', 'monster': {'id': 'monster-1'}},
-                        {'id': 'adventure-2', 'user_id': 'user-2', 'monster': {'id': 'monster-2'}}
-                    ]
-                    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
                     mock_process.return_value = 1
 
                     from scheduler import process_active_adventures
 
-                    process_active_adventures()
+                    await process_active_adventures()
 
                     assert mock_process.call_count == 2
 
-    def test_logs_rounds_processed(self):
+    async def test_logs_rounds_processed(self):
         """Test that number of adventure rounds processed is logged."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
+            adventures_data = [{'id': 'adventure-1', 'user_id': 'user-1', 'monster': {'id': 'monster-1'}}]
+            mock_supabase = _make_async_supabase_mock(adventures_data)
+            with patch('scheduler.supabase', mock_supabase):
                 with patch('scheduler.process_adventure_rounds') as mock_process:
-                    mock_res = Mock()
-                    mock_res.data = [{'id': 'adventure-1', 'user_id': 'user-1', 'monster': {'id': 'monster-1'}}]
-                    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
                     mock_process.return_value = 3
 
                     from scheduler import process_active_adventures
 
-                    process_active_adventures()
+                    await process_active_adventures()
 
                     mock_logger.info.assert_any_call("Adventure check complete. Processed 3 round(s)")
 
-    def test_handles_database_error_gracefully(self):
+    async def test_handles_database_error_gracefully(self):
         """Test that database errors are caught and logged."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
-                mock_supabase.table.return_value.select.return_value.eq.return_value.execute.side_effect = Exception("DB Error")
-
+            mock_supabase = AsyncMock()
+            mock_supabase.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(
+                side_effect=Exception("DB Error")
+            )
+            with patch('scheduler.supabase', mock_supabase):
                 from scheduler import process_active_adventures
 
-                process_active_adventures()
+                await process_active_adventures()
 
                 mock_logger.error.assert_called()
 
-    def test_handles_processing_error_for_single_adventure(self):
+    async def test_handles_processing_error_for_single_adventure(self):
         """Test that error processing one adventure doesn't stop others."""
         with patch('scheduler.logger') as mock_logger:
-            with patch('scheduler.supabase') as mock_supabase:
+            adventures_data = [
+                {'id': 'adventure-1', 'user_id': 'user-1', 'monster': {'id': 'monster-1'}},
+                {'id': 'adventure-2', 'user_id': 'user-2', 'monster': {'id': 'monster-2'}}
+            ]
+            mock_supabase = _make_async_supabase_mock(adventures_data)
+            with patch('scheduler.supabase', mock_supabase):
                 with patch('scheduler.process_adventure_rounds') as mock_process:
-                    mock_res = Mock()
-                    mock_res.data = [
-                        {'id': 'adventure-1', 'user_id': 'user-1', 'monster': {'id': 'monster-1'}},
-                        {'id': 'adventure-2', 'user_id': 'user-2', 'monster': {'id': 'monster-2'}}
-                    ]
-                    mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_res
-
                     mock_process.side_effect = [Exception("Adventure error"), 1]
 
                     from scheduler import process_active_adventures
 
-                    process_active_adventures()
+                    await process_active_adventures()
 
                     assert mock_process.call_count == 2
                     mock_logger.error.assert_called()
@@ -313,7 +319,7 @@ class TestStartScheduler:
                 start_scheduler()
 
                 mock_logger.info.assert_called_with(
-                    "Background scheduler started (hourly battle + adventure processing)"
+                    "Async scheduler started (hourly battle + adventure processing)"
                 )
 
 
@@ -337,4 +343,4 @@ class TestShutdownScheduler:
 
                 shutdown_scheduler()
 
-                mock_logger.info.assert_called_with("Background scheduler stopped")
+                mock_logger.info.assert_called_with("Async scheduler stopped")

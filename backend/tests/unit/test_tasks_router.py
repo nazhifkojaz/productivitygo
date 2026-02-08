@@ -8,7 +8,7 @@ Tests task planning and drafting functionality for both PVP battles and adventur
 """
 import pytest
 from datetime import date, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 from fastapi import HTTPException
 
 from models import TaskCreate
@@ -34,8 +34,9 @@ def setup_profile_mock(mock_supabase, user_id='user-123', **overrides):
     }
     profile_data.update(overrides)
 
+    mock_execute = AsyncMock(return_value=create_mock_execute_response(profile_data))
     mock_supabase.table.return_value.select.return_value.eq.return_value.single\
-        .return_value.execute.return_value = create_mock_execute_response(profile_data)
+        .return_value.execute = mock_execute
 
 
 # =============================================================================
@@ -67,9 +68,10 @@ class TestDraftTasksEntryMatching:
         setup_profile_mock(mock_supabase_base, 'user-123', timezone='UTC')
 
         # Mock active battle (using maybe_single now)
+        mock_battle_response = create_mock_execute_response({'id': 'battle-123'})
+        mock_battle_execute = AsyncMock(return_value=mock_battle_response)
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.maybe_single.return_value.execute.return_value = \
-            create_mock_execute_response({'id': 'battle-123'})
+            .eq.return_value.maybe_single.return_value.execute = mock_battle_execute
 
         # Mock daily_entries query returning entries
         existing_entry = {
@@ -87,18 +89,22 @@ class TestDraftTasksEntryMatching:
             'adventure_id': None,
         }
 
-        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([
+        mock_entries_response = create_mock_execute_response([
             existing_entry, other_entry
         ])
+        mock_entries_execute = AsyncMock(return_value=mock_entries_response)
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
+            .return_value.execute = mock_entries_execute
 
         # Mock tasks delete (for clearing existing tasks)
+        mock_delete_response = create_mock_execute_response(None)
         mock_supabase_base.table.return_value.delete.return_value.eq.return_value\
-            .execute.return_value = create_mock_execute_response(None)
+            .execute = AsyncMock(return_value=mock_delete_response)
 
         # Mock tasks insert
-        mock_supabase_base.table.return_value.insert.return_value.execute\
-            .return_value = create_mock_execute_response(None)
+        mock_insert_response = create_mock_execute_response(None)
+        mock_supabase_base.table.return_value.insert.return_value\
+            .execute = AsyncMock(return_value=mock_insert_response)
 
         # Import and call the function directly
         from routers.tasks import draft_tasks
@@ -254,14 +260,16 @@ class TestDraftTasksValidation:
         battle_response = create_mock_execute_response(None)
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
-        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.maybe_single.return_value.execute.side_effect = [
+        mock_session_execute = AsyncMock(side_effect=[
             battle_response,
             adventure_response,
-        ]
+        ])
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .eq.return_value.maybe_single.return_value.execute = mock_session_execute
 
+        mock_entries_execute = AsyncMock(return_value=create_mock_execute_response([]))
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = mock_entries_execute
 
         from routers.tasks import draft_tasks
 
@@ -288,14 +296,16 @@ class TestDraftTasksValidation:
         battle_response = create_mock_execute_response(None)
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
-        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.maybe_single.return_value.execute.side_effect = [
+        mock_session_execute = AsyncMock(side_effect=[
             battle_response,
             adventure_response,
-        ]
+        ])
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .eq.return_value.maybe_single.return_value.execute = mock_session_execute
 
+        mock_entries_execute = AsyncMock(return_value=create_mock_execute_response([]))
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = mock_entries_execute
 
         from routers.tasks import draft_tasks
 
@@ -317,14 +327,16 @@ class TestDraftTasksValidation:
         battle_response = create_mock_execute_response(None)
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
-        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.maybe_single.return_value.execute.side_effect = [
+        mock_session_execute = AsyncMock(side_effect=[
             battle_response,
             adventure_response,
-        ]
+        ])
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .eq.return_value.maybe_single.return_value.execute = mock_session_execute
 
+        mock_entries_execute = AsyncMock(return_value=create_mock_execute_response([]))
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = mock_entries_execute
 
         from routers.tasks import draft_tasks
 
@@ -348,26 +360,42 @@ class TestDraftTasksValidation:
     @pytest.mark.asyncio
     async def test_draft_tasks_incomplete_plan_allowed(self, mock_supabase_base, mock_user):
         """Should allow incomplete mandatory task plans (fewer than quota)."""
-        setup_profile_mock(mock_supabase_base, 'user-123', timezone='UTC')
+        # Mock table() to return different mocks based on the table name
+        def mock_table(table_name):
+            mock_obj = Mock()
+            if table_name == "profiles":
+                # Profile query
+                mock_obj.select.return_value.eq.return_value.single.return_value\
+                    .execute = AsyncMock(return_value=create_mock_execute_response({
+                        'id': 'user-123',
+                        'timezone': 'UTC',
+                    }))
+            elif table_name == "battles":
+                # Battle query returns None (no active battle)
+                mock_obj.select.return_value.or_.return_value.eq.return_value.maybe_single.return_value\
+                    .execute = AsyncMock(return_value=create_mock_execute_response(None))
+            elif table_name == "adventures":
+                # Adventure query returns active adventure
+                mock_obj.select.return_value.eq.return_value.eq.return_value.maybe_single.return_value\
+                    .execute = AsyncMock(return_value=create_mock_execute_response({'id': 'adventure-123'}))
+            elif table_name == "daily_entries":
+                # No existing entries (for the select query)
+                mock_obj.select.return_value.eq.return_value.eq.return_value\
+                    .execute = AsyncMock(return_value=create_mock_execute_response([]))
+                # Insert new daily entry
+                mock_obj.insert.return_value.execute = AsyncMock(return_value=create_mock_execute_response([{
+                    'id': 'entry-new',
+                    'user_id': 'user-123',
+                }]))
+            elif table_name == "tasks":
+                # Insert tasks
+                mock_obj.insert.return_value.execute = AsyncMock(return_value=create_mock_execute_response([{
+                    'id': 'entry-new',
+                    'user_id': 'user-123',
+                }]))
+            return mock_obj
 
-        # Mock active adventure
-        battle_response = create_mock_execute_response(None)
-        adventure_response = create_mock_execute_response({'id': 'adventure-123'})
-
-        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.maybe_single.return_value.execute.side_effect = [
-            battle_response,
-            adventure_response,
-        ]
-
-        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
-
-        mock_supabase_base.table.return_value.insert.return_value.execute\
-            .return_value = create_mock_execute_response([{
-                'id': 'entry-new',
-                'user_id': 'user-123',
-            }])
+        mock_supabase_base.table.side_effect = mock_table
 
         from routers.tasks import draft_tasks
 
@@ -391,14 +419,16 @@ class TestDraftTasksValidation:
         battle_response = create_mock_execute_response(None)
         adventure_response = create_mock_execute_response({'id': 'adventure-123'})
 
-        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .eq.return_value.maybe_single.return_value.execute.side_effect = [
+        mock_session_execute = AsyncMock(side_effect=[
             battle_response,
             adventure_response,
-        ]
+        ])
+        mock_supabase_base.table.return_value.select.return_value.or_.return_value\
+            .eq.return_value.maybe_single.return_value.execute = mock_session_execute
 
+        mock_entries_execute = AsyncMock(return_value=create_mock_execute_response([]))
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = mock_entries_execute
 
         from routers.tasks import draft_tasks
 

@@ -4,10 +4,11 @@ Unit tests for battle processor and timezone handling.
 Tests round processing, timezone handling, and date calculations.
 """
 import pytest
+import asyncio
 from datetime import date, datetime
 import pytz
 import pytz.exceptions
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 
 from utils.battle_processor import get_local_date, process_battle_rounds
 
@@ -152,7 +153,8 @@ class TestBattleProcessorRoundProcessing:
         with patch('utils.battle_processor.supabase') as mock:
             yield mock
 
-    def test_round_not_processed_when_date_not_passed(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_round_not_processed_when_date_not_passed(self, mock_supabase_base):
         """Test that round is not processed when date hasn't passed for both players."""
         battle = {
             'id': 'battle-123',
@@ -167,16 +169,25 @@ class TestBattleProcessorRoundProcessing:
             'user2': {'timezone': 'UTC'}
         }
 
+        # Mock the supabase call to fetch profiles
+        mock_supabase_base.table.return_value.select.return_value.in_.return_value.execute = AsyncMock(
+            return_value=Mock(data=[
+                {'id': 'user-1', 'timezone': 'UTC'},
+                {'id': 'user-2', 'timezone': 'UTC'}
+            ])
+        )
+
         # Mock dates that haven't passed yet
         with patch('utils.battle_processor.datetime') as mock_dt:
             # Today is before round date
             mock_dt.now.return_value.date.return_value = date(2026, 1, 19)
 
-            result = process_battle_rounds(battle)
+            result = await process_battle_rounds(battle)
             # Should not process any rounds
             assert result == 0
 
-    def test_round_processed_when_both_players_finished(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_round_processed_when_both_players_finished(self, mock_supabase_base):
         """Test that round is processed when both players have finished."""
         battle = {
             'id': 'battle-123',
@@ -193,11 +204,17 @@ class TestBattleProcessorRoundProcessing:
 
         # Mock successful RPC
         mock_rpc = Mock()
-        mock_rpc.execute.return_value = Mock(data=[
+        mock_rpc.execute = AsyncMock(return_value=Mock(data=[
             {'user1_xp': 100, 'user2_xp': 50, 'winner_id': 'user-1'}
-        ])
+        ]))
         mock_supabase_base.rpc.return_value = mock_rpc
-        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute.return_value = Mock()
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+        mock_supabase_base.table.return_value.select.return_value.in_.return_value.execute = AsyncMock(
+            return_value=Mock(data=[
+                {'id': 'user-1', 'timezone': 'UTC'},
+                {'id': 'user-2', 'timezone': 'UTC'}
+            ])
+        )
 
         with patch('utils.battle_processor.get_local_date') as mock_date:
             # Both players have finished the round (yesterday)
@@ -206,12 +223,13 @@ class TestBattleProcessorRoundProcessing:
                 date(2026, 1, 21)   # user2's local date
             ]
 
-            result = process_battle_rounds(battle)
+            result = await process_battle_rounds(battle)
 
             # Should process one round
             assert result == 1
 
-    def test_multiple_rounds_processed(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_multiple_rounds_processed(self, mock_supabase_base):
         """Test that multiple rounds are processed correctly."""
         battle = {
             'id': 'battle-123',
@@ -228,11 +246,17 @@ class TestBattleProcessorRoundProcessing:
 
         # Mock successful RPC calls
         mock_rpc = Mock()
-        mock_rpc.execute.return_value = Mock(data=[
+        mock_rpc.execute = AsyncMock(return_value=Mock(data=[
             {'user1_xp': 100, 'user2_xp': 50, 'winner_id': 'user-1'}
-        ])
+        ]))
         mock_supabase_base.rpc.return_value = mock_rpc
-        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute.return_value = Mock()
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+        mock_supabase_base.table.return_value.select.return_value.in_.return_value.execute = AsyncMock(
+            return_value=Mock(data=[
+                {'id': 'user-1', 'timezone': 'UTC'},
+                {'id': 'user-2', 'timezone': 'UTC'}
+            ])
+        )
 
         # Mock date.today() to return a date 2 days after start date
         with patch('utils.battle_processor.date') as mock_date:
@@ -248,12 +272,13 @@ class TestBattleProcessorRoundProcessing:
                     date(2026, 1, 22),  # user2's local date for round 1
                 ]
 
-                result = process_battle_rounds(battle)
+                result = await process_battle_rounds(battle)
 
                 # Should process two rounds
                 assert result == 2
 
-    def test_processing_stops_at_battle_completion(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_processing_stops_at_battle_completion(self, mock_supabase_base):
         """Test that processing stops when battle duration is reached."""
         battle = {
             'id': 'battle-123',
@@ -270,11 +295,17 @@ class TestBattleProcessorRoundProcessing:
 
         # Mock battle completion RPC
         mock_rpc = Mock()
-        mock_rpc.execute.return_value = Mock(data=[
+        mock_rpc.execute = AsyncMock(return_value=Mock(data=[
             {'winner_id': 'user-1', 'user1_total_xp': 300, 'user2_total_xp': 200, 'already_completed': False}
-        ])
+        ]))
         mock_supabase_base.rpc.return_value = mock_rpc
-        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute.return_value = Mock()
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
+        mock_supabase_base.table.return_value.select.return_value.in_.return_value.execute = AsyncMock(
+            return_value=Mock(data=[
+                {'id': 'user-1', 'timezone': 'UTC'},
+                {'id': 'user-2', 'timezone': 'UTC'}
+            ])
+        )
 
         with patch('utils.battle_processor.get_local_date') as mock_date:
             # Both players finished the last round
@@ -283,7 +314,7 @@ class TestBattleProcessorRoundProcessing:
                 date(2026, 1, 23),
             ]
 
-            result = process_battle_rounds(battle)
+            result = await process_battle_rounds(battle)
 
             # Should process the final round
             assert result >= 0
