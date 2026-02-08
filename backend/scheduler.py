@@ -7,7 +7,7 @@ Uses APScheduler to run hourly checks on:
 
 REFACTOR-007: Replaced print statements with centralized logging.
 """
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
 from database import supabase
 from utils.battle_processor import process_battle_rounds
@@ -17,7 +17,7 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 
-def process_active_battles():
+async def process_active_battles():
     """
     Hourly job: Check all active battles and process rounds
     when both players have finished their day.
@@ -26,7 +26,7 @@ def process_active_battles():
 
     # 1. Fetch all active battles
     try:
-        battles_res = supabase.table("battles").select("*").eq("status", "active").execute()
+        battles_res = await supabase.table("battles").select("*").eq("status", "active").execute()
         battles = battles_res.data if battles_res.data else []
         logger.info(f"Found {len(battles)} active battles")
     except Exception as e:
@@ -37,7 +37,7 @@ def process_active_battles():
     total_rounds = 0
     for battle in battles:
         try:
-            rounds = process_battle_rounds(battle)
+            rounds = await process_battle_rounds(battle)
             total_rounds += rounds
         except Exception as e:
             logger.error(f"Error processing battle {battle['id']}: {e}")
@@ -46,14 +46,14 @@ def process_active_battles():
     logger.info(f"Hourly check complete. Processed {total_rounds} round(s)")
 
 
-def process_active_adventures():
+async def process_active_adventures():
     """
     Hourly job: Check all active adventures and process rounds.
     """
     logger.info("Running hourly adventure check")
 
     try:
-        adventures_res = supabase.table("adventures")\
+        adventures_res = await supabase.table("adventures")\
             .select("*, monster:monsters(*)")\
             .eq("status", "active").execute()
         adventures = adventures_res.data if adventures_res.data else []
@@ -65,7 +65,7 @@ def process_active_adventures():
     total_rounds = 0
     for adventure in adventures:
         try:
-            rounds = process_adventure_rounds(adventure)
+            rounds = await process_adventure_rounds(adventure)
             total_rounds += rounds
         except Exception as e:
             logger.error(f"Error processing adventure {adventure['id']}: {e}")
@@ -74,11 +74,12 @@ def process_active_adventures():
     logger.info(f"Adventure check complete. Processed {total_rounds} round(s)")
 
 
-# Initialize scheduler
-scheduler = BackgroundScheduler()
+# Initialize async scheduler
+scheduler = AsyncIOScheduler()
+
 
 def start_scheduler():
-    """Start the background scheduler"""
+    """Start the async scheduler"""
     # Battle processing job
     scheduler.add_job(
         process_active_battles,
@@ -98,9 +99,10 @@ def start_scheduler():
     )
 
     scheduler.start()
-    logger.info("Background scheduler started (hourly battle + adventure processing)")
+    logger.info("Async scheduler started (hourly battle + adventure processing)")
+
 
 def shutdown_scheduler():
     """Gracefully shut down the scheduler"""
     scheduler.shutdown()
-    logger.info("Background scheduler stopped")
+    logger.info("Async scheduler stopped")
