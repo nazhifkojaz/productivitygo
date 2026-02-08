@@ -36,7 +36,7 @@ async def get_monster_pool(user = Depends(get_current_user)):
     Refresh count resets to 3 for each new adventure session.
     """
     # Get user's rating and initialize refresh count
-    profile_res = supabase.table("profiles").select("monster_rating")\
+    profile_res = await supabase.table("profiles").select("monster_rating")\
         .eq("id", user.id).single().execute()
 
     if not profile_res.data:
@@ -45,10 +45,10 @@ async def get_monster_pool(user = Depends(get_current_user)):
     rating = profile_res.data.get('monster_rating', 0)
 
     # Initialize/refresh count from database (resets if new session)
-    remaining = AdventureService.initialize_refresh_count(user.id)
+    remaining = await AdventureService.initialize_refresh_count(user.id)
 
     # Get weighted pool
-    pool = AdventureService.get_weighted_monster_pool(rating, count=4)
+    pool = await AdventureService.get_weighted_monster_pool(rating, count=4)
 
     return {
         "monsters": pool,
@@ -64,7 +64,7 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
     Refresh monster pool. Max 3 refreshes per adventure start.
     """
     # Get user's rating
-    profile_res = supabase.table("profiles").select("monster_rating")\
+    profile_res = await supabase.table("profiles").select("monster_rating")\
         .eq("id", user.id).single().execute()
 
     if not profile_res.data:
@@ -74,7 +74,7 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
 
     # Decrement refresh count (raises exception if none remaining)
     try:
-        remaining = AdventureService.decrement_refresh_count(user.id)
+        remaining = await AdventureService.decrement_refresh_count(user.id)
     except HTTPException:
         raise HTTPException(
             status_code=400,
@@ -82,7 +82,7 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
         )
 
     # Get new pool
-    pool = AdventureService.get_weighted_monster_pool(rating, count=4)
+    pool = await AdventureService.get_weighted_monster_pool(rating, count=4)
 
     return {
         "monsters": pool,
@@ -104,10 +104,10 @@ async def start_adventure(body: dict, user = Depends(get_current_user)):
     if not monster_id:
         raise HTTPException(status_code=400, detail="monster_id is required")
 
-    adventure = AdventureService.create_adventure(user.id, monster_id)
+    adventure = await AdventureService.create_adventure(user.id, monster_id)
 
     # Fetch with monster data for response
-    full_adventure = supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
+    full_adventure = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
         .eq("id", adventure['id']).single().execute()
 
     return full_adventure.data
@@ -120,7 +120,7 @@ async def get_current_adventure(user = Depends(get_current_user)):
     """
     # Fetch active adventure with monster
     try:
-        res = supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
+        res = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
             .eq("user_id", user.id)\
             .eq("status", "active")\
             .single().execute()
@@ -134,7 +134,7 @@ async def get_current_adventure(user = Depends(get_current_user)):
     adventure = res.data
 
     # Get user timezone for app state calculation
-    profile_res = supabase.table("profiles").select("timezone")\
+    profile_res = await supabase.table("profiles").select("timezone")\
         .eq("id", user.id).single().execute()
 
     user_tz = profile_res.data.get('timezone', 'UTC') if profile_res.data else 'UTC'
@@ -175,7 +175,7 @@ async def get_adventure_details(adventure_id: str, user = Depends(get_current_us
     """
     # Fetch adventure with monster
     try:
-        res = supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
+        res = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
             .eq("id", adventure_id).single().execute()
     except Exception:
         raise HTTPException(status_code=404, detail="Adventure not found")
@@ -190,7 +190,7 @@ async def get_adventure_details(adventure_id: str, user = Depends(get_current_us
         raise HTTPException(status_code=403, detail="Not your adventure")
 
     # Fetch daily breakdown
-    entries_res = supabase.table("daily_entries").select("date, daily_xp")\
+    entries_res = await supabase.table("daily_entries").select("date, daily_xp")\
         .eq("adventure_id", adventure_id)\
         .order("date")\
         .execute()
@@ -213,7 +213,7 @@ async def abandon_adventure(adventure_id: str, user = Depends(get_current_user))
     """
     Abandon adventure early. Receives 50% of earned XP.
     """
-    return AdventureService.abandon_adventure(adventure_id, user.id)
+    return await AdventureService.abandon_adventure(adventure_id, user.id)
 
 
 @router.post("/{adventure_id}/break", operation_id="schedule_break")
@@ -223,4 +223,4 @@ async def schedule_break(adventure_id: str, user = Depends(get_current_user)):
 
     Extends deadline by 1 day. Max 2 breaks per adventure.
     """
-    return AdventureService.schedule_break(adventure_id, user.id)
+    return await AdventureService.schedule_break(adventure_id, user.id)

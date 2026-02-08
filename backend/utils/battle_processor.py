@@ -32,17 +32,17 @@ def get_local_date(tz_str: str) -> date:
         return datetime.now(pytz.utc).date()
 
 
-def process_battle_rounds(battle: dict) -> int:
+async def process_battle_rounds(battle: dict) -> int:
     """
     Process pending rounds for a battle if both players have finished their day.
-    
+
     This function is shared between:
     - APScheduler (hourly background job)
     - Lazy Evaluation (on dashboard load)
-    
+
     Args:
         battle: Battle dict from database
-    
+
     Returns:
         Number of rounds processed
     """
@@ -55,7 +55,7 @@ def process_battle_rounds(battle: dict) -> int:
     user1_id = battle['user1_id']
     user2_id = battle['user2_id']
 
-    profiles = supabase.table("profiles").select("id, timezone").in_("id", [user1_id, user2_id]).execute()
+    profiles = await supabase.table("profiles").select("id, timezone").in_("id", [user1_id, user2_id]).execute()
 
     # Extract timezones from batch result
     tz1 = "UTC"
@@ -65,30 +65,30 @@ def process_battle_rounds(battle: dict) -> int:
             tz1 = profile.get('timezone', 'UTC')
         elif profile['id'] == user2_id:
             tz2 = profile.get('timezone', 'UTC')
-    
+
     # Get local dates for both players
     date1 = get_local_date(tz1)
     date2 = get_local_date(tz2)
-    
+
     # Check how many rounds should be processed
     days_since_start = (date.today() - start_date).days
     rounds_to_process = min(days_since_start, duration)
-    
+
     if current_round >= rounds_to_process:
         # Already up to date
         return 0
-    
+
     # Process pending rounds
     rounds_processed = 0
     for r in range(current_round, rounds_to_process):
         round_date = start_date + timedelta(days=r)
-        
+
         # CRITICAL: Only process if BOTH players have finished this day
         if date1 > round_date and date2 > round_date:
             logger.debug(f"Processing round {r} for battle {battle_id} (Date: {round_date})")
             try:
                 # Call the database function to calculate round
-                rpc_result = supabase.rpc("calculate_daily_round", {
+                rpc_result = await supabase.rpc("calculate_daily_round", {
                     "battle_uuid": battle_id,
                     "round_date": round_date.isoformat()
                 }).execute()
@@ -108,7 +108,7 @@ def process_battle_rounds(battle: dict) -> int:
 
                 # Update round count only after validating RPC succeeded
                 current_round += 1
-                supabase.table("battles").update({"current_round": current_round}).eq("id", battle_id).execute()
+                await supabase.table("battles").update({"current_round": current_round}).eq("id", battle_id).execute()
                 rounds_processed += 1
 
                 # Log successful round processing with XP values
@@ -122,12 +122,12 @@ def process_battle_rounds(battle: dict) -> int:
         else:
             # Can't process this round yet, stop
             break
-    
+
     # Check if battle is complete
     if current_round >= duration and battle['status'] == 'active':
         logger.info(f"Battle {battle_id} is complete, finalizing...")
         try:
-            result = supabase.rpc("complete_battle", {"battle_uuid": battle_id}).execute()
+            result = await supabase.rpc("complete_battle", {"battle_uuid": battle_id}).execute()
 
             # BUG-004 FIX: Validate RPC response
             if result.data is None:

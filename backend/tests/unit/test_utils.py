@@ -6,7 +6,7 @@ and game session abstraction.
 """
 import pytest
 from datetime import date
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 from fastapi import HTTPException
 
 
@@ -279,21 +279,23 @@ class TestGameModeEnum:
 # Test get_active_game_session Helper
 # =============================================================================
 
+@pytest.mark.asyncio
 class TestGetActiveGameSession:
     """Test get_active_game_session helper function."""
 
-    def test_returns_battle_id_and_pvp_mode_when_active_battle_exists(self, mock_user):
+    async def test_returns_battle_id_and_pvp_mode_when_active_battle_exists(self, mock_user):
         """Test that active battle returns battle ID and PVP mode."""
         with patch('utils.game_session.supabase') as mock_supabase:
             # Mock active battle response
             mock_battle_res = Mock()
             mock_battle_res.data = {'id': 'battle-456'}
+            mock_execute = AsyncMock(return_value=mock_battle_res)
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = mock_battle_res
+                .or_.return_value.eq.return_value.maybe_single.return_value.execute = mock_execute
 
             from utils.game_session import get_active_game_session
 
-            session_id, game_mode = get_active_game_session(mock_user.id)
+            session_id, game_mode = await get_active_game_session(mock_user.id)
 
             assert session_id == "battle-456"
             assert game_mode == "pvp"
@@ -302,7 +304,7 @@ class TestGetActiveGameSession:
             assert game_mode == GameMode.PVP
             assert game_mode.value == "pvp"
 
-    def test_raises_400_when_no_active_session(self, mock_user):
+    async def test_raises_400_when_no_active_session(self, mock_user):
         """Test that HTTPException raised when no battle or adventure found."""
         with patch('utils.game_session.supabase') as mock_supabase:
             # Create empty result objects
@@ -310,33 +312,36 @@ class TestGetActiveGameSession:
             empty_result.data = None
 
             # Mock battle check to return no results
+            mock_battle_execute = AsyncMock(return_value=empty_result)
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+                .or_.return_value.eq.return_value.maybe_single.return_value.execute = mock_battle_execute
 
             # Mock adventure check to return no results (note: TWO .eq() calls)
+            mock_adventure_execute = AsyncMock(return_value=empty_result)
             mock_supabase.table.return_value.select.return_value\
-                .eq.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+                .eq.return_value.eq.return_value.maybe_single.return_value.execute = mock_adventure_execute
 
             from utils.game_session import get_active_game_session
 
             with pytest.raises(HTTPException) as exc_info:
-                get_active_game_session(mock_user.id)
+                await get_active_game_session(mock_user.id)
 
             assert exc_info.value.status_code == 400
             assert "No active battle or adventure found" in str(exc_info.value.detail)
 
-    def test_battle_takes_priority_over_adventure(self, mock_user):
+    async def test_battle_takes_priority_over_adventure(self, mock_user):
         """Test that battle is returned when both battle and adventure exist."""
         with patch('utils.game_session.supabase') as mock_supabase:
             # Mock active battle response
             mock_battle_res = Mock()
             mock_battle_res.data = {'id': 'battle-456'}
+            mock_execute = AsyncMock(return_value=mock_battle_res)
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = mock_battle_res
+                .or_.return_value.eq.return_value.maybe_single.return_value.execute = mock_execute
 
             from utils.game_session import get_active_game_session
 
-            session_id, game_mode = get_active_game_session(mock_user.id)
+            session_id, game_mode = await get_active_game_session(mock_user.id)
 
             # Should return battle, not continue to check adventure
             assert session_id == "battle-456"
@@ -345,7 +350,7 @@ class TestGetActiveGameSession:
             assert game_mode == GameMode.PVP
             assert game_mode.value == "pvp"
 
-    def test_returns_adventure_id_and_adventure_mode_when_active_adventure_exists(self, mock_user):
+    async def test_returns_adventure_id_and_adventure_mode_when_active_adventure_exists(self, mock_user):
         """Test that active adventure returns adventure ID and ADVENTURE mode."""
         with patch('utils.game_session.supabase') as mock_supabase:
             # Create empty result for battle
@@ -357,17 +362,19 @@ class TestGetActiveGameSession:
             adventure_result.data = {'id': 'adventure-789'}
 
             # Mock battle check to return no results
+            mock_battle_execute = AsyncMock(return_value=empty_result)
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+                .or_.return_value.eq.return_value.maybe_single.return_value.execute = mock_battle_execute
 
             # Mock adventure check to return adventure
             # Note: adventure query has TWO .eq() calls, so we need .eq().eq()
+            mock_adventure_execute = AsyncMock(return_value=adventure_result)
             mock_supabase.table.return_value.select.return_value\
-                .eq.return_value.eq.return_value.single.return_value.execute.return_value = adventure_result
+                .eq.return_value.eq.return_value.maybe_single.return_value.execute = mock_adventure_execute
 
             from utils.game_session import get_active_game_session
 
-            session_id, game_mode = get_active_game_session(mock_user.id)
+            session_id, game_mode = await get_active_game_session(mock_user.id)
 
             assert session_id == "adventure-789"
             assert game_mode == "adventure"
@@ -412,39 +419,43 @@ class TestGetDailyEntryKey:
 # Test has_active_game_session Helper
 # =============================================================================
 
+@pytest.mark.asyncio
 class TestHasActiveGameSession:
     """Test has_active_game_session helper function."""
 
-    def test_returns_true_when_user_has_active_battle(self, mock_user):
+    async def test_returns_true_when_user_has_active_battle(self, mock_user):
         """Test that True is returned when user has active battle."""
         with patch('utils.game_session.supabase') as mock_supabase:
             mock_battle_res = Mock()
             mock_battle_res.data = {'id': 'battle-456'}
+            mock_execute = AsyncMock(return_value=mock_battle_res)
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = mock_battle_res
+                .or_.return_value.eq.return_value.maybe_single.return_value.execute = mock_execute
 
             from utils.game_session import has_active_game_session
 
-            result = has_active_game_session(mock_user.id)
+            result = await has_active_game_session(mock_user.id)
             assert result is True
 
-    def test_returns_false_when_user_has_no_active_battle(self, mock_user):
+    async def test_returns_false_when_user_has_no_active_battle(self, mock_user):
         """Test that False is returned when user has no active battle OR adventure."""
         with patch('utils.game_session.supabase') as mock_supabase:
             empty_result = Mock()
             empty_result.data = None
 
             # Mock battle check to return no results
+            mock_battle_execute = AsyncMock(return_value=empty_result)
             mock_supabase.table.return_value.select.return_value\
-                .or_.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+                .or_.return_value.eq.return_value.maybe_single.return_value.execute = mock_battle_execute
 
             # Mock adventure check to also return no results (note: TWO .eq() calls)
+            mock_adventure_execute = AsyncMock(return_value=empty_result)
             mock_supabase.table.return_value.select.return_value\
-                .eq.return_value.eq.return_value.single.return_value.execute.return_value = empty_result
+                .eq.return_value.eq.return_value.maybe_single.return_value.execute = mock_adventure_execute
 
             from utils.game_session import has_active_game_session
 
-            result = has_active_game_session(mock_user.id)
+            result = await has_active_game_session(mock_user.id)
             assert result is False
 
 

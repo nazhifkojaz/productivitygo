@@ -83,7 +83,7 @@ class AdventureService:
     # =========================================================================
 
     @staticmethod
-    def initialize_refresh_count(user_id: str) -> int:
+    async def initialize_refresh_count(user_id: str) -> int:
         """
         Initialize or refresh the monster pool refresh count.
         Resets to 3 if not set today, otherwise returns current count.
@@ -91,7 +91,7 @@ class AdventureService:
         Returns:
             Current refresh count (always starts at 3 for new session)
         """
-        profile_res = supabase.table("profiles").select(
+        profile_res = await supabase.table("profiles").select(
             "monster_pool_refreshes", "monster_pool_refresh_set_at"
         ).eq("id", user_id).single().execute()
 
@@ -114,7 +114,7 @@ class AdventureService:
 
         if should_reset:
             # Reset to 3 and update timestamp
-            supabase.table("profiles").update({
+            await supabase.table("profiles").update({
                 "monster_pool_refreshes": 3,
                 "monster_pool_refresh_set_at": datetime.utcnow().isoformat()
             }).eq("id", user_id).execute()
@@ -124,7 +124,7 @@ class AdventureService:
             return refreshes if refreshes is not None else 3
 
     @staticmethod
-    def decrement_refresh_count(user_id: str) -> int:
+    async def decrement_refresh_count(user_id: str) -> int:
         """
         Decrement the refresh count by 1.
 
@@ -134,7 +134,7 @@ class AdventureService:
         Raises:
             HTTPException: If no refreshes remaining
         """
-        profile_res = supabase.table("profiles").select(
+        profile_res = await supabase.table("profiles").select(
             "monster_pool_refreshes"
         ).eq("id", user_id).single().execute()
 
@@ -147,19 +147,19 @@ class AdventureService:
             raise HTTPException(status_code=400, detail="No refreshes remaining")
 
         new_count = current - 1
-        supabase.table("profiles").update({
+        await supabase.table("profiles").update({
             "monster_pool_refreshes": new_count
         }).eq("id", user_id).execute()
 
         return new_count
 
     @staticmethod
-    def reset_refresh_count(user_id: str):
+    async def reset_refresh_count(user_id: str):
         """
         Reset the refresh count to NULL after adventure starts.
         This allows a fresh count for the next adventure.
         """
-        supabase.table("profiles").update({
+        await supabase.table("profiles").update({
             "monster_pool_refreshes": None,
             "monster_pool_refresh_set_at": None
         }).eq("id", user_id).execute()
@@ -169,7 +169,7 @@ class AdventureService:
     # =========================================================================
 
     @staticmethod
-    def get_weighted_monster_pool(rating: int, count: int = 4) -> List[dict]:
+    async def get_weighted_monster_pool(rating: int, count: int = 4) -> List[dict]:
         """
         Get weighted random monster pool based on rating.
 
@@ -184,7 +184,7 @@ class AdventureService:
         weights = AdventureService.get_tier_weights(rating)
 
         # Fetch all monsters from unlocked tiers
-        monsters_res = supabase.table("monsters").select("*")\
+        monsters_res = await supabase.table("monsters").select("*")\
             .in_("tier", unlocked_tiers).execute()
 
         if not monsters_res.data:
@@ -224,7 +224,7 @@ class AdventureService:
     # =========================================================================
 
     @staticmethod
-    def create_adventure(user_id: str, monster_id: str) -> dict:
+    async def create_adventure(user_id: str, monster_id: str) -> dict:
         """
         Create a new adventure.
 
@@ -239,7 +239,7 @@ class AdventureService:
             HTTPException: If user has active session or monster not found
         """
         # 1. Check for active battle
-        existing_battle = supabase.table("battles").select("id")\
+        existing_battle = await supabase.table("battles").select("id")\
             .or_(f"user1_id.eq.{user_id},user2_id.eq.{user_id}")\
             .in_("status", ["active", "pending"]).execute()
 
@@ -250,7 +250,7 @@ class AdventureService:
             )
 
         # 2. Check for active adventure
-        existing_adventure = supabase.table("adventures").select("id")\
+        existing_adventure = await supabase.table("adventures").select("id")\
             .eq("user_id", user_id).eq("status", "active").execute()
 
         if existing_adventure.data:
@@ -261,7 +261,7 @@ class AdventureService:
 
         # 3. Fetch monster
         try:
-            monster_res = supabase.table("monsters").select("*")\
+            monster_res = await supabase.table("monsters").select("*")\
                 .eq("id", monster_id).single().execute()
         except Exception:
             raise HTTPException(status_code=404, detail="Monster not found")
@@ -272,7 +272,7 @@ class AdventureService:
         monster = monster_res.data
 
         # 4. Check tier access
-        profile_res = supabase.table("profiles").select("monster_rating")\
+        profile_res = await supabase.table("profiles").select("monster_rating")\
             .eq("id", user_id).single().execute()
 
         if not profile_res.data:
@@ -311,7 +311,7 @@ class AdventureService:
             "max_break_days": 2,
         }
 
-        res = supabase.table("adventures").insert(adventure_data).execute()
+        res = await supabase.table("adventures").insert(adventure_data).execute()
 
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to create adventure")
@@ -319,7 +319,7 @@ class AdventureService:
         adventure = res.data[0]
 
         # 7. Update profile with current_adventure and reset refresh count
-        supabase.table("profiles").update({
+        await supabase.table("profiles").update({
             "current_adventure": adventure['id'],
             "monster_pool_refreshes": None,
             "monster_pool_refresh_set_at": None
@@ -334,7 +334,7 @@ class AdventureService:
     # =========================================================================
 
     @staticmethod
-    def schedule_break(adventure_id: str, user_id: str) -> dict:
+    async def schedule_break(adventure_id: str, user_id: str) -> dict:
         """
         Schedule tomorrow as a break day.
 
@@ -349,7 +349,7 @@ class AdventureService:
             HTTPException: If adventure not found, not owned, or no breaks left
         """
         # 1. Fetch adventure
-        adventure_res = supabase.table("adventures").select("*")\
+        adventure_res = await supabase.table("adventures").select("*")\
             .eq("id", adventure_id).single().execute()
 
         if not adventure_res.data:
@@ -377,7 +377,7 @@ class AdventureService:
         current_deadline = date.fromisoformat(adventure['deadline'])
         new_deadline = current_deadline + timedelta(days=1)
 
-        supabase.table("adventures").update({
+        await supabase.table("adventures").update({
             "is_on_break": True,
             "break_end_date": tomorrow.isoformat(),
             "break_days_used": adventure['break_days_used'] + 1,
@@ -398,14 +398,14 @@ class AdventureService:
     # =========================================================================
 
     @staticmethod
-    def abandon_adventure(adventure_id: str, user_id: str) -> dict:
+    async def abandon_adventure(adventure_id: str, user_id: str) -> dict:
         """
         Abandon adventure early with 50% XP.
 
         Uses SQL function for atomic operation.
         """
         try:
-            result = supabase.rpc("abandon_adventure", {
+            result = await supabase.rpc("abandon_adventure", {
                 "adventure_uuid": adventure_id,
                 "abandoning_user": user_id
             }).execute()

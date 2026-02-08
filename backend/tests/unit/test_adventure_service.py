@@ -9,8 +9,9 @@ Tests business logic for adventure operations:
 - Damage and XP calculations
 """
 import pytest
+import asyncio
 from datetime import date, timedelta, datetime
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 from fastapi import HTTPException
 
 from services.adventure_service import AdventureService, TIER_DURATIONS, TIER_MULTIPLIERS
@@ -139,82 +140,107 @@ class TestRefreshCount:
         with patch('services.adventure_service.supabase') as mock:
             yield mock
 
-    def test_initialize_refresh_count_new_user(self, mock_supabase_base):
+    def setup_profile_mock_async(self, mock_supabase, user_id='user-123', **overrides):
+        """Setup a profile mock with default values for async tests."""
+        profile_data = {
+            'id': user_id,
+            'monster_rating': 0,
+            'timezone': 'UTC',
+            'monster_pool_refreshes': None,
+            'monster_pool_refresh_set_at': None,
+        }
+        profile_data.update(overrides)
+
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single\
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response(profile_data))
+
+    @pytest.mark.asyncio
+    async def test_initialize_refresh_count_new_user(self, mock_supabase_base):
         """Initialize refresh count for user with no previous count."""
-        setup_profile_mock(
+        self.setup_profile_mock_async(
             mock_supabase_base,
             monster_pool_refreshes=None,
             monster_pool_refresh_set_at=None
         )
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        result = AdventureService.initialize_refresh_count('user-123')
+        result = await AdventureService.initialize_refresh_count('user-123')
 
         assert result == 3
         # Should update profile with new count and timestamp
         mock_supabase_base.table.return_value.update.assert_called_once()
 
-    def test_initialize_refresh_count_existing_today(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_initialize_refresh_count_existing_today(self, mock_supabase_base):
         """Return existing count if set today."""
-        setup_profile_mock(
+        self.setup_profile_mock_async(
             mock_supabase_base,
             monster_pool_refreshes=2,
             monster_pool_refresh_set_at=datetime.now().isoformat()
         )
 
-        result = AdventureService.initialize_refresh_count('user-123')
+        result = await AdventureService.initialize_refresh_count('user-123')
 
         assert result == 2
         # Should not update
         mock_supabase_base.table.return_value.update.assert_not_called()
 
-    def test_initialize_refresh_count_stale_resets(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_initialize_refresh_count_stale_resets(self, mock_supabase_base):
         """Reset count if timestamp is from yesterday."""
         yesterday = (datetime.now() - timedelta(days=1)).isoformat()
-        setup_profile_mock(
+        self.setup_profile_mock_async(
             mock_supabase_base,
             monster_pool_refreshes=1,
             monster_pool_refresh_set_at=yesterday
         )
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        result = AdventureService.initialize_refresh_count('user-123')
+        result = await AdventureService.initialize_refresh_count('user-123')
 
         assert result == 3
         # Should update profile
         mock_supabase_base.table.return_value.update.assert_called_once()
 
-    def test_decrement_refresh_count_success(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_decrement_refresh_count_success(self, mock_supabase_base):
         """Successfully decrement refresh count."""
-        setup_profile_mock(mock_supabase_base, monster_pool_refreshes=3)
+        self.setup_profile_mock_async(mock_supabase_base, monster_pool_refreshes=3)
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        result = AdventureService.decrement_refresh_count('user-123')
+        result = await AdventureService.decrement_refresh_count('user-123')
 
         assert result == 2
         mock_supabase_base.table.return_value.update.assert_called_once()
 
-    def test_decrement_refresh_count_exhausted(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_decrement_refresh_count_exhausted(self, mock_supabase_base):
         """Raise exception when no refreshes remaining."""
-        setup_profile_mock(mock_supabase_base, monster_pool_refreshes=0)
+        self.setup_profile_mock_async(mock_supabase_base, monster_pool_refreshes=0)
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.decrement_refresh_count('user-123')
+            await AdventureService.decrement_refresh_count('user-123')
 
         assert exc_info.value.status_code == 400
         assert "No refreshes remaining" in exc_info.value.detail
 
-    def test_decrement_refresh_count_none_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_decrement_refresh_count_none_raises(self, mock_supabase_base):
         """Raise exception when count is None."""
-        setup_profile_mock(mock_supabase_base, monster_pool_refreshes=None)
+        self.setup_profile_mock_async(mock_supabase_base, monster_pool_refreshes=None)
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.decrement_refresh_count('user-123')
+            await AdventureService.decrement_refresh_count('user-123')
 
         assert exc_info.value.status_code == 400
 
-    def test_reset_refresh_count(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_reset_refresh_count(self, mock_supabase_base):
         """Reset refresh count to None."""
-        setup_profile_mock(mock_supabase_base, monster_pool_refreshes=2)
+        self.setup_profile_mock_async(mock_supabase_base, monster_pool_refreshes=2)
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        AdventureService.reset_refresh_count('user-123')
+        await AdventureService.reset_refresh_count('user-123')
 
         # Verify update was called with None values
         call_args = mock_supabase_base.table.return_value.update.call_args[0][0]
@@ -234,36 +260,39 @@ class TestMonsterPool:
         with patch('services.adventure_service.supabase') as mock:
             yield mock
 
-    def test_get_weighted_monster_pool_returns_4(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_get_weighted_monster_pool_returns_4(self, mock_supabase_base):
         """Returns exactly 4 monsters."""
         # Mock monsters from easy tier
         mock_supabase_base.table.return_value.select.return_value.in_.return_value\
-            .execute.return_value = create_mock_execute_response([
+            .execute = AsyncMock(return_value=create_mock_execute_response([
                 {'id': 'm1', 'name': 'Slime', 'tier': 'easy', 'base_hp': 100},
                 {'id': 'm2', 'name': 'Rat', 'tier': 'easy', 'base_hp': 120},
                 {'id': 'm3', 'name': 'Goblin', 'tier': 'easy', 'base_hp': 150},
                 {'id': 'm4', 'name': 'Imp', 'tier': 'easy', 'base_hp': 180},
-            ])
+            ]))
 
-        result = AdventureService.get_weighted_monster_pool(0, count=4)
+        result = await AdventureService.get_weighted_monster_pool(0, count=4)
 
         assert len(result) == 4
 
-    def test_get_weighted_monster_pool_no_duplicates(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_get_weighted_monster_pool_no_duplicates(self, mock_supabase_base):
         """Never returns duplicate monsters."""
         monsters = [
             {'id': f'm{i}', 'name': f'M{i}', 'tier': 'easy', 'base_hp': 100}
             for i in range(10)
         ]
         mock_supabase_base.table.return_value.select.return_value.in_.return_value\
-            .execute.return_value = create_mock_execute_response(monsters)
+            .execute = AsyncMock(return_value=create_mock_execute_response(monsters))
 
-        result = AdventureService.get_weighted_monster_pool(0, count=4)
+        result = await AdventureService.get_weighted_monster_pool(0, count=4)
 
         ids = [m['id'] for m in result]
         assert len(ids) == len(set(ids)), "No duplicate IDs allowed"
 
-    def test_get_weighted_monster_pool_respects_tier_weights(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_get_weighted_monster_pool_respects_tier_weights(self, mock_supabase_base):
         """Uses correct weights based on rating."""
         # Rating 5: easy 15%, medium 25%, hard 60%
         monsters = [
@@ -275,32 +304,34 @@ class TestMonsterPool:
             {'id': 'h3', 'name': 'Hard3', 'tier': 'hard', 'base_hp': 400},
         ]
         mock_supabase_base.table.return_value.select.return_value.in_.return_value\
-            .execute.return_value = create_mock_execute_response(monsters)
+            .execute = AsyncMock(return_value=create_mock_execute_response(monsters))
 
-        result = AdventureService.get_weighted_monster_pool(5, count=4)
+        result = await AdventureService.get_weighted_monster_pool(5, count=4)
 
         # With rating 5, should get mostly hard monsters
         assert len(result) == 4
 
-    def test_get_weighted_monster_pool_insufficient_monsters(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_get_weighted_monster_pool_insufficient_monsters(self, mock_supabase_base):
         """Handles case where fewer monsters available than requested."""
         mock_supabase_base.table.return_value.select.return_value.in_.return_value\
-            .execute.return_value = create_mock_execute_response([
+            .execute = AsyncMock(return_value=create_mock_execute_response([
                 {'id': 'm1', 'name': 'Only', 'tier': 'easy', 'base_hp': 100},
-            ])
+            ]))
 
-        result = AdventureService.get_weighted_monster_pool(0, count=4)
+        result = await AdventureService.get_weighted_monster_pool(0, count=4)
 
         # Returns available monsters (less than count)
         assert len(result) < 4
 
-    def test_get_weighted_monster_pool_no_monsters_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_get_weighted_monster_pool_no_monsters_raises(self, mock_supabase_base):
         """Raises exception when no monsters available."""
         mock_supabase_base.table.return_value.select.return_value.in_.return_value\
-            .execute.return_value = create_mock_execute_response([])
+            .execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.get_weighted_monster_pool(0)
+            await AdventureService.get_weighted_monster_pool(0)
 
         assert exc_info.value.status_code == 500
         assert "No monsters available" in exc_info.value.detail
@@ -318,15 +349,16 @@ class TestAdventureCreation:
         with patch('services.adventure_service.supabase') as mock:
             yield mock
 
-    def test_create_adventure_success(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_create_adventure_success(self, mock_supabase_base):
         """Successfully create an adventure."""
         # Mock no active battles
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .in_.return_value.execute.return_value = create_mock_execute_response([])
+            .in_.return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock no active adventure
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock monster fetch (first select().eq().single() call on monsters table)
         # Mock profile fetch (second select().eq().single() call on profiles table)
@@ -334,7 +366,7 @@ class TestAdventureCreation:
 
         # Setup separate call chain for monsters table
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.side_effect = [
+            .return_value.execute = AsyncMock(side_effect=[
                 create_mock_execute_response({
                     'id': 'monster-1',
                     'name': 'Slime',
@@ -342,35 +374,38 @@ class TestAdventureCreation:
                     'base_hp': 100
                 }),
                 create_mock_execute_response({'monster_rating': 0}),
-            ]
+            ])
 
-        # Mock adventure insert
-        mock_supabase_base.table.return_value.insert.return_value.execute\
-            .return_value = create_mock_execute_response([{
+        # Mock adventure insert and profile update
+        mock_supabase_base.table.return_value.insert.return_value.execute = AsyncMock(
+            return_value=create_mock_execute_response([{
                 'id': 'adv-123',
                 'user_id': 'user-123',
                 'monster_id': 'monster-1',
                 'status': 'active'
             }])
+        )
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        result = AdventureService.create_adventure('user-123', 'monster-1')
+        result = await AdventureService.create_adventure('user-123', 'monster-1')
 
         assert result['id'] == 'adv-123'
         assert result['status'] == 'active'
 
-    def test_create_adventure_start_date_is_tomorrow(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_create_adventure_start_date_is_tomorrow(self, mock_supabase_base):
         """Adventure start_date should be tomorrow, giving a preparation day."""
         # Mock no active battles
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .in_.return_value.execute.return_value = create_mock_execute_response([])
+            .in_.return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock no active adventure
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock monster and profile
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.side_effect = [
+            .return_value.execute = AsyncMock(side_effect=[
                 create_mock_execute_response({
                     'id': 'monster-1',
                     'name': 'Slime',
@@ -378,7 +413,7 @@ class TestAdventureCreation:
                     'base_hp': 100
                 }),
                 create_mock_execute_response({'monster_rating': 0}),
-            ]
+            ])
 
         # Capture the inserted adventure data to verify start_date
         inserted_data = {}
@@ -408,101 +443,106 @@ class TestAdventureCreation:
             inserted_data.update(data)
             # Return a mock that when execute() is called returns our response
             execute_mock = Mock()
-            execute_mock.execute.return_value = create_mock_execute_response([{
+            execute_mock.execute = AsyncMock(return_value=create_mock_execute_response([{
                 'id': 'adv-123',
                 'user_id': 'user-123',
                 'monster_id': 'monster-1',
                 'status': 'active',
                 'start_date': data.get('start_date'),
                 'deadline': data.get('deadline'),
-            }])
+            }]))
             return execute_mock
 
         insert_mock.side_effect = mock_insert_call
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        AdventureService.create_adventure('user-123', 'monster-1')
+        await AdventureService.create_adventure('user-123', 'monster-1')
 
         # Verify start_date is tomorrow
         expected_start = (date.today() + timedelta(days=1)).isoformat()
         assert inserted_data['start_date'] == expected_start, \
             f"start_date should be tomorrow ({expected_start}), got {inserted_data['start_date']}"
 
-    def test_create_adventure_active_battle_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_create_adventure_active_battle_raises(self, mock_supabase_base):
         """Raise exception when user has active battle."""
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .in_.return_value.execute.return_value = create_mock_execute_response([
+            .in_.return_value.execute = AsyncMock(return_value=create_mock_execute_response([
             {'id': 'battle-1'}
-        ])
+        ]))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.create_adventure('user-123', 'monster-1')
+            await AdventureService.create_adventure('user-123', 'monster-1')
 
         assert exc_info.value.status_code == 400
         assert "active battle" in exc_info.value.detail
 
-    def test_create_adventure_active_adventure_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_create_adventure_active_adventure_raises(self, mock_supabase_base):
         """Raise exception when user has active adventure."""
         # Mock no active battles
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .in_.return_value.execute.return_value = create_mock_execute_response([])
+            .in_.return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock existing adventure
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response([
             {'id': 'adv-1'}
-        ])
+        ]))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.create_adventure('user-123', 'monster-1')
+            await AdventureService.create_adventure('user-123', 'monster-1')
 
         assert exc_info.value.status_code == 400
         assert "active adventure" in exc_info.value.detail
 
-    def test_create_adventure_monster_not_found_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_create_adventure_monster_not_found_raises(self, mock_supabase_base):
         """Raise exception when monster doesn't exist."""
         # Mock no active sessions
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .in_.return_value.execute.return_value = create_mock_execute_response([])
+            .in_.return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock profile
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.return_value = create_mock_execute_response({
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response({
                 'monster_rating': 0
-            })
+            }))
 
         # Mock monster not found
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.side_effect = Exception("Not found")
+            .return_value.execute = AsyncMock(side_effect=Exception("Not found"))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.create_adventure('user-123', 'monster-1')
+            await AdventureService.create_adventure('user-123', 'monster-1')
 
         assert exc_info.value.status_code == 404
 
-    def test_create_adventure_tier_locked_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_create_adventure_tier_locked_raises(self, mock_supabase_base):
         """Raise exception when monster tier is locked."""
         # Mock no active sessions
         mock_supabase_base.table.return_value.select.return_value.or_.return_value\
-            .in_.return_value.execute.return_value = create_mock_execute_response([])
+            .in_.return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
-            .return_value.execute.return_value = create_mock_execute_response([])
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response([]))
 
         # Mock monster with hard tier (locked) - comes first
         # Mock profile with rating 0 (only easy unlocked) - comes second
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.side_effect = [
+            .return_value.execute = AsyncMock(side_effect=[
                 create_mock_execute_response({
                     'id': 'monster-1',
                     'tier': 'hard',
                     'base_hp': 400
                 }),
                 create_mock_execute_response({'monster_rating': 0}),
-            ]
+            ])
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.create_adventure('user-123', 'monster-1')
+            await AdventureService.create_adventure('user-123', 'monster-1')
 
         assert exc_info.value.status_code == 403
         assert "not unlocked" in exc_info.value.detail
@@ -520,7 +560,8 @@ class TestBreakScheduling:
         with patch('services.adventure_service.supabase') as mock:
             yield mock
 
-    def test_schedule_break_success(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_schedule_break_success(self, mock_supabase_base):
         """Successfully schedule a break day."""
         adventure = {
             'id': 'adv-123',
@@ -533,24 +574,27 @@ class TestBreakScheduling:
         }
 
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.return_value = create_mock_execute_response(adventure)
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response(adventure))
+        mock_supabase_base.table.return_value.update.return_value.eq.return_value.execute = AsyncMock()
 
-        result = AdventureService.schedule_break('adv-123', 'user-123')
+        result = await AdventureService.schedule_break('adv-123', 'user-123')
 
         assert result['status'] == 'break_scheduled'
         assert result['breaks_remaining'] == 1  # 2 - 0 - 1
 
-    def test_schedule_break_not_found_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_schedule_break_not_found_raises(self, mock_supabase_base):
         """Raise exception when adventure not found."""
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.return_value = create_mock_execute_response(None)
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response(None))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.schedule_break('adv-123', 'user-123')
+            await AdventureService.schedule_break('adv-123', 'user-123')
 
         assert exc_info.value.status_code == 404
 
-    def test_schedule_break_not_owner_raises(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_schedule_break_not_owner_raises(self, mock_supabase_base):
         """Raise exception when user doesn't own adventure."""
         adventure = {
             'id': 'adv-123',
@@ -563,15 +607,16 @@ class TestBreakScheduling:
         }
 
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.return_value = create_mock_execute_response(adventure)
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response(adventure))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.schedule_break('adv-123', 'user-123')
+            await AdventureService.schedule_break('adv-123', 'user-123')
 
         assert exc_info.value.status_code == 403
         assert "Not your adventure" in exc_info.value.detail
 
-    def test_schedule_break_no_breaks_remaining(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_schedule_break_no_breaks_remaining(self, mock_supabase_base):
         """Raise exception when no break days remaining."""
         adventure = {
             'id': 'adv-123',
@@ -584,15 +629,16 @@ class TestBreakScheduling:
         }
 
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.return_value = create_mock_execute_response(adventure)
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response(adventure))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.schedule_break('adv-123', 'user-123')
+            await AdventureService.schedule_break('adv-123', 'user-123')
 
         assert exc_info.value.status_code == 400
         assert "No break days remaining" in exc_info.value.detail
 
-    def test_schedule_break_already_on_break(self, mock_supabase_base):
+    @pytest.mark.asyncio
+    async def test_schedule_break_already_on_break(self, mock_supabase_base):
         """Raise exception when already on break."""
         adventure = {
             'id': 'adv-123',
@@ -605,10 +651,10 @@ class TestBreakScheduling:
         }
 
         mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
-            .return_value.execute.return_value = create_mock_execute_response(adventure)
+            .return_value.execute = AsyncMock(return_value=create_mock_execute_response(adventure))
 
         with pytest.raises(HTTPException) as exc_info:
-            AdventureService.schedule_break('adv-123', 'user-123')
+            await AdventureService.schedule_break('adv-123', 'user-123')
 
         assert exc_info.value.status_code == 400
         assert "Already on break" in exc_info.value.detail

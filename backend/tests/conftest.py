@@ -6,7 +6,7 @@ Fixtures are automatically available to any test file in the tests/ directory.
 """
 import sys
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, AsyncMock
 import pytest
 from datetime import date
 
@@ -23,6 +23,37 @@ def mock_supabase():
     """Mock supabase client for testing."""
     with patch('services.battle_service.supabase') as mock:
         yield mock
+
+
+@pytest.fixture
+def mock_async_supabase():
+    """
+    Mock async Supabase client for testing.
+
+    Provides an AsyncMock-compatible supabase client where .execute() returns awaitable results.
+    Use this for tests that involve async database operations.
+    """
+    mock = AsyncMock()
+
+    # Mock table().select()...execute() chain
+    mock.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(
+        return_value=Mock(data=[])
+    )
+    mock.table.return_value.select.return_value.in_.return_value.execute = AsyncMock(
+        return_value=Mock(data=[])
+    )
+
+    # Mock rpc().execute() chain
+    mock.rpc.return_value.execute = AsyncMock(
+        return_value=Mock(data=None)
+    )
+
+    # Mock auth.get_user() as async
+    mock.auth.get_user = AsyncMock(
+        return_value=Mock(user=Mock(id="test-user-id"))
+    )
+
+    return mock
 
 
 @pytest.fixture
