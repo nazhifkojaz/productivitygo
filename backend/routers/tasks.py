@@ -30,18 +30,18 @@ async def get_quota(date_str: str = None, user = Depends(get_current_user)):
             raise HTTPException(status_code=400, detail="Invalid date format (YYYY-MM-DD)")
     else:
         # Default to tomorrow (planning mode)
-        profile_res = supabase.table("profiles").select("timezone").eq("id", user.id).single().execute()
+        profile_res = await supabase.table("profiles").select("timezone").eq("id", user.id).single().execute()
         timezone = profile_res.data['timezone'] if profile_res.data else "UTC"
         user_today = get_user_date(timezone)
         target_date = user_today + timedelta(days=1)
-        
+
     quota = get_daily_quota(target_date)
     return {"date": target_date.isoformat(), "quota": quota}
 
 @router.post("/draft", operation_id="draft_tasks")
 async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user)):
     # 1. Get User Profile to know Timezone
-    profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
+    profile_res = await supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
 
@@ -78,14 +78,14 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
     # 3. Check/Create Daily Entry for Tomorrow
     # REFACTOR-003: Use game session helper to abstract battle mode
     # This supports both PVP battles and future adventure mode
-    session_id, game_mode = get_active_game_session(user.id)
+    session_id, game_mode = await get_active_game_session(user.id)
 
     # Get the appropriate daily entry key based on game mode
     entry_key = get_daily_entry_key(session_id, game_mode)
 
     # Check if entry exists
     # Need to select battle_id and adventure_id for entry matching logic
-    entry_res = supabase.table("daily_entries").select("id, battle_id, adventure_id")\
+    entry_res = await supabase.table("daily_entries").select("id, battle_id, adventure_id")\
         .eq("user_id", user.id)\
         .eq("date", user_tomorrow.isoformat())\
         .execute()
@@ -105,7 +105,7 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
     if existing_entry:
         entry_id = existing_entry['id']
         # Clear existing draft tasks
-        supabase.table("tasks").delete().eq("daily_entry_id", entry_id).execute()
+        await supabase.table("tasks").delete().eq("daily_entry_id", entry_id).execute()
     else:
         # Create new entry with the appropriate key
         new_entry_data = {
@@ -116,9 +116,9 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
         # Add battle_id or adventure_id based on game mode
         new_entry_data.update(entry_key)
 
-        new_entry = supabase.table("daily_entries").insert(new_entry_data).execute()
+        new_entry = await supabase.table("daily_entries").insert(new_entry_data).execute()
         entry_id = new_entry.data[0]['id']
-        
+
     # 4. Insert Tasks
     task_data = []
 
@@ -135,63 +135,63 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
             "content": t.content,
             "is_optional": True,
         })
-    
+
     if task_data:
-        supabase.table("tasks").insert(task_data).execute()
-        
+        await supabase.table("tasks").insert(task_data).execute()
+
     return {"status": "success", "date": user_tomorrow}
 
 @router.get("/today", response_model=List[Task], operation_id="get_today_tasks")
 async def get_today_tasks(user = Depends(get_current_user)):
     # 1. Get User Profile
-    profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
+    profile_res = await supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     profile = profile_res.data
     user_today = get_user_date(profile['timezone'])
-    
+
     # 2. Find Daily Entry for Today
     # We join with tasks manually or via separate query
     # First get entry
-    entry_res = supabase.table("daily_entries").select("id")\
+    entry_res = await supabase.table("daily_entries").select("id")\
         .eq("user_id", user.id)\
         .eq("date", user_today.isoformat())\
         .execute()
-        
+
     if not entry_res.data:
         return []
-        
+
     entry_id = entry_res.data[0]['id']
-    
+
     # 3. Get Tasks
-    tasks_res = supabase.table("tasks").select(TASKS_FULL).eq("daily_entry_id", entry_id).execute()
+    tasks_res = await supabase.table("tasks").select(TASKS_FULL).eq("daily_entry_id", entry_id).execute()
     return tasks_res.data
 
 @router.get("/draft", response_model=List[Task], operation_id="get_draft_tasks")
 async def get_draft_tasks(user = Depends(get_current_user)):
     # 1. Get User Profile
-    profile_res = supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
+    profile_res = await supabase.table("profiles").select(PROFILE_TIMEZONE).eq("id", user.id).single().execute()
     if not profile_res.data:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     profile = profile_res.data
     user_today = get_user_date(profile['timezone'])
     user_tomorrow = user_today + timedelta(days=1)
-    
+
     # 2. Find Daily Entry for Tomorrow
-    entry_res = supabase.table("daily_entries").select("id")\
+    entry_res = await supabase.table("daily_entries").select("id")\
         .eq("user_id", user.id)\
         .eq("date", user_tomorrow.isoformat())\
         .execute()
-        
+
     if not entry_res.data:
         return []
-        
+
     entry_id = entry_res.data[0]['id']
-    
+
     # 3. Get Tasks
-    tasks_res = supabase.table("tasks").select(TASKS_FULL).eq("daily_entry_id", entry_id).execute()
+    tasks_res = await supabase.table("tasks").select(TASKS_FULL).eq("daily_entry_id", entry_id).execute()
     return tasks_res.data
 
 @router.post("/{task_id}/complete", operation_id="complete_task")
@@ -199,15 +199,15 @@ async def complete_task(task_id: UUID, proof_url: str = None, user = Depends(get
     # 1. Verify Task belongs to user
     # We can do this by joining tables, or just checking if the task exists and links to a daily entry owned by the user.
     # Supabase RLS handles the security, but we need to return a proper error if it fails or returns nothing.
-    
+
     # Update the task
     update_data = {"is_completed": True}
     if proof_url:
         update_data["proof_url"] = proof_url
-        
-    res = supabase.table("tasks").update(update_data).eq("id", str(task_id)).execute()
-    
+
+    res = await supabase.table("tasks").update(update_data).eq("id", str(task_id)).execute()
+
     if not res.data:
         raise HTTPException(status_code=404, detail="Task not found or not authorized")
-        
+
     return {"status": "success", "task": res.data[0]}

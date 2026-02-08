@@ -23,7 +23,7 @@ async def get_pending_invites(user = Depends(get_current_user)):
     """
     # Find pending battles where user is the invitee (user2)
     # We assume user1 is always the inviter for now
-    res = supabase.table("battles").select("*, user1:profiles!user1_id(username)")\
+    res = await supabase.table("battles").select("*, user1:profiles!user1_id(username)")\
         .eq("user2_id", user.id)\
         .eq("status", "pending")\
         .execute()
@@ -35,7 +35,7 @@ async def send_invite(invite: InviteRequest, user = Depends(get_current_user)):
     """
     Create a new battle invite.
     """
-    battle = BattleService.create_invite(user.id, invite.rival_id, invite.start_date, invite.duration)
+    battle = await BattleService.create_invite(user.id, invite.rival_id, invite.start_date, invite.duration)
     return {"status": "success", "battle": battle}
 
 
@@ -44,9 +44,9 @@ async def accept_battle_invite(battle_id: str, user = Depends(get_current_user))
     """
     Accept a pending battle invite.
     """
-    BattleService.accept_invite(battle_id, user.id)
+    await BattleService.accept_invite(battle_id, user.id)
     # Fetch updated battle to return
-    battle_res = supabase.table("battles").select("*").eq("id", battle_id).single().execute()
+    battle_res = await supabase.table("battles").select("*").eq("id", battle_id).single().execute()
     return battle_res.data
 
 
@@ -55,7 +55,7 @@ async def reject_battle_invite(battle_id: str, user = Depends(get_current_user))
     """
     Reject or cancel a battle invite.
     """
-    return BattleService.reject_invite(battle_id, user.id)
+    return await BattleService.reject_invite(battle_id, user.id)
 
 
 @router.post("/{battle_id}/rematch", operation_id="rematch_battle")
@@ -63,7 +63,7 @@ async def create_rematch(battle_id: str, user = Depends(get_current_user)):
     """
     Create a rematch invitation after a completed battle.
     """
-    return BattleService.create_rematch(battle_id, user.id)
+    return await BattleService.create_rematch(battle_id, user.id)
 
 
 @router.get("/{battle_id}/pending-rematch", operation_id="get_pending_rematch")
@@ -72,7 +72,7 @@ async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
     Check if there's a pending rematch invitation for a given completed battle.
     """
     # Get the completed battle to find users
-    completed_battle_res = supabase.table("battles").select(BATTLE_FOR_REMATCH).eq("id", battle_id).execute()
+    completed_battle_res = await supabase.table("battles").select(BATTLE_FOR_REMATCH).eq("id", battle_id).execute()
     if not completed_battle_res.data:
         raise HTTPException(status_code=404, detail="Battle not found")
 
@@ -82,7 +82,7 @@ async def get_pending_rematch(battle_id: str, user = Depends(get_current_user)):
 
     # Find pending rematch battles between the same users in either order:
     # (user1_id=ALICE AND user2_id=BOB) OR (user1_id=BOB AND user2_id=ALICE)
-    matching_res = supabase.table("battles").select(BATTLE_PENDING_CHECK)\
+    matching_res = await supabase.table("battles").select(BATTLE_PENDING_CHECK)\
         .eq("status", "pending")\
         .or_(f"and(user1_id.eq.{user1_id},user2_id.eq.{user2_id}),and(user1_id.eq.{user2_id},user2_id.eq.{user1_id})")\
         .execute()
@@ -106,4 +106,4 @@ async def decline_rematch(battle_id: str, user = Depends(get_current_user)):
     """
     Decline a pending rematch invitation.
     """
-    return BattleService.decline_rematch(battle_id)
+    return await BattleService.decline_rematch(battle_id)
