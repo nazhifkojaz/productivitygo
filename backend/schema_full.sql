@@ -802,6 +802,8 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 6.8 calculate_adventure_round — Process one PVE round
 -- ----------------------------------------------------------------------------
+-- Updated for Phase 3: Category-based damage calculation
+-- Each task calculates its own damage with type multiplier, then summed
 CREATE OR REPLACE FUNCTION calculate_adventure_round(
     adventure_uuid UUID,
     round_date DATE
@@ -812,12 +814,22 @@ AS $$
 DECLARE
     v_adventure RECORD;
     v_entry_id UUID;
+    v_monster_type TEXT;
     v_mandatory_total INT;
-    v_mandatory_completed INT;
-    v_optional_completed INT;
+    v_task_record RECORD;
+    v_task_base_damage NUMERIC;
+    v_multiplier NUMERIC;
+    v_effectiveness TEXT;
+    v_total_damage NUMERIC := 0;
     v_damage INT;
     v_new_hp INT;
 BEGIN
+    -- Get monster type first
+    SELECT m.monster_type INTO v_monster_type
+    FROM monsters m
+    JOIN adventures a ON a.monster_id = m.id
+    WHERE a.id = adventure_uuid;
+
     -- Get adventure with row lock
     SELECT * INTO v_adventure
     FROM adventures
@@ -850,24 +862,61 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Count tasks
-    SELECT
-        COUNT(*) FILTER (WHERE NOT is_optional),
-        COUNT(*) FILTER (WHERE is_completed AND NOT is_optional),
-        COUNT(*) FILTER (WHERE is_completed AND is_optional)
-    INTO v_mandatory_total, v_mandatory_completed, v_optional_completed
+    -- Count total mandatory tasks (for base damage calculation)
+    SELECT COUNT(*) FILTER (WHERE NOT is_optional)
+    INTO v_mandatory_total
     FROM tasks
     WHERE daily_entry_id = v_entry_id;
 
-    -- Calculate damage (capped at 120)
-    IF v_mandatory_total > 0 THEN
-        v_damage := LEAST(
-            (v_mandatory_completed::FLOAT / v_mandatory_total * 100)::INT + (v_optional_completed * 10),
-            120
-        );
-    ELSE
-        v_damage := LEAST(v_optional_completed * 10, 120);
-    END IF;
+    -- Loop through each COMPLETED task and calculate damage individually
+    FOR v_task_record IN
+        SELECT t.id, t.category, t.is_optional, t.is_completed
+        FROM tasks t
+        WHERE t.daily_entry_id = v_entry_id AND t.is_completed = true
+    LOOP
+        -- Calculate base damage for this task
+        IF v_task_record.is_optional THEN
+            v_task_base_damage := 10;
+        ELSE
+            -- Avoid division by zero
+            IF v_mandatory_total > 0 THEN
+                v_task_base_damage := 100::NUMERIC / v_mandatory_total;
+            ELSE
+                v_task_base_damage := 0;
+            END IF;
+        END IF;
+
+        -- Get type multiplier from type_effectiveness table
+        -- NULL category or missing entry defaults to 1.0 (neutral)
+        SELECT COALESCE(te.multiplier, 1.0)
+        INTO v_multiplier
+        FROM type_effectiveness te
+        WHERE te.monster_type = v_monster_type
+          AND te.task_category = v_task_record.category;
+
+        -- Accumulate damage
+        v_total_damage := v_total_damage + (v_task_base_damage * v_multiplier);
+
+        -- Determine effectiveness for discovery recording
+        IF v_multiplier >= 1.5 THEN
+            v_effectiveness := 'super_effective';
+        ELSIF v_multiplier <= 0.5 THEN
+            v_effectiveness := 'resisted';
+        ELSE
+            v_effectiveness := 'neutral';
+        END IF;
+
+        -- Record discovery (idempotent via ON CONFLICT)
+        -- Only record if we have a valid category
+        IF v_task_record.category IS NOT NULL THEN
+            INSERT INTO type_discoveries (user_id, monster_type, task_category, effectiveness, discovered_at)
+            VALUES (v_adventure.user_id, v_monster_type, v_task_record.category, v_effectiveness, now())
+            ON CONFLICT (user_id, monster_type, task_category) DO NOTHING;
+        END IF;
+    END LOOP;
+
+    -- Finalize damage: floor and cap at 180 (raised from 120 for SE bonus)
+    v_damage := LEAST(FLOOR(v_total_damage), 180)::INT;
 
     -- Apply damage (floor at 0)
     v_new_hp := GREATEST(v_adventure.monster_current_hp - v_damage, 0);
