@@ -1,4 +1,4 @@
-import type { Monster } from './monster';
+import type { Monster, TypeDiscovery } from './monster';
 
 /**
  * Adventure app states computed by the backend
@@ -43,6 +43,9 @@ export interface Adventure {
 
     // Embedded monster data
     monster?: Monster;
+
+    // Discovered type effectiveness for current monster
+    discoveries?: TypeDiscovery[];
 
     // Computed fields (from API)
     app_state?: AdventureAppState;
