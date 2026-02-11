@@ -55,7 +55,7 @@ PROFILE_PRIVATE = "id, username, email, level, total_xp_earned, battle_count, ba
 # =============================================================================
 
 # For fetching tasks (all fields needed for response)
-TASKS_FULL = "id, daily_entry_id, content, is_optional, is_completed, proof_url, created_at"
+TASKS_FULL = "id, daily_entry_id, content, is_optional, is_completed, proof_url, created_at, category"
 
 # =============================================================================
 # Battle Table Columns (Additions)
@@ -83,7 +83,7 @@ ADVENTURE_FULL = """
 """
 
 # For adventure with embedded monster data
-ADVENTURE_WITH_MONSTER = "*, monster:monsters(id, name, emoji, tier, base_hp, description)"
+ADVENTURE_WITH_MONSTER = "*, monster:monsters(id, name, emoji, tier, base_hp, description, monster_type)"
 
 # For adventure history display
 ADVENTURE_MATCH_HISTORY = "id, monster_id, status, xp_earned, total_damage_dealt, completed_at, duration"
@@ -93,7 +93,7 @@ ADVENTURE_MATCH_HISTORY = "id, monster_id, status, xp_earned, total_damage_dealt
 # =============================================================================
 
 # For basic monster display
-MONSTER_BASIC = "id, name, emoji, tier, base_hp"
+MONSTER_BASIC = "id, name, emoji, tier, base_hp, monster_type"
 
 # For full monster data
-MONSTER_FULL = "id, name, emoji, tier, base_hp, description"
+MONSTER_FULL = "id, name, emoji, tier, base_hp, description, monster_type"
