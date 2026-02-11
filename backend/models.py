@@ -24,6 +24,7 @@ class Profile(ProfileBase):
 class TaskBase(BaseModel):
     content: str
     is_optional: bool = False
+    category: str = "errand"
 
 class TaskCreate(TaskBase):
     pass
@@ -76,6 +77,7 @@ class MonsterBase(BaseModel):
     tier: str  # easy, medium, hard, expert, boss
     base_hp: int
     description: Optional[str] = None
+    monster_type: str = "sloth"
 
 
 class Monster(MonsterBase):
