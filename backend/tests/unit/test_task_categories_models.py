@@ -38,6 +38,11 @@ class TestTaskBaseCategory:
         task = TaskBase(content="Test task")
         assert isinstance(task.category, str)
 
+    def test_taskbase_rejects_invalid_category(self):
+        """TaskBase should reject invalid category values with ValidationError."""
+        with pytest.raises(ValidationError):
+            TaskBase(content="Test task", category="banana")
+
 
 # =============================================================================
 # Test TaskCreate inherits category
@@ -109,6 +114,17 @@ class TestMonsterBaseMonsterType:
             base_hp=100
         )
         assert isinstance(monster.monster_type, str)
+
+    def test_monsterbase_rejects_invalid_monster_type(self):
+        """MonsterBase should reject invalid monster_type values with ValidationError."""
+        with pytest.raises(ValidationError):
+            MonsterBase(
+                name="Test Monster",
+                emoji="👹",
+                tier="easy",
+                base_hp=100,
+                monster_type="dragon"
+            )
 
     def test_monsterbase_all_fields_with_monster_type(self):
         """MonsterBase should work with all fields including monster_type."""
