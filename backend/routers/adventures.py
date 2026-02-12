@@ -113,10 +113,47 @@ async def start_adventure(body: dict, user = Depends(get_current_user)):
     return full_adventure.data
 
 
+@router.get("/discoveries", operation_id="get_discoveries")
+async def get_discoveries(
+    monster_type: Optional[str] = None,
+    user = Depends(get_current_user)
+):
+    """
+    Get the user's discovered type effectiveness entries.
+
+    Optionally filter by monster_type to get discoveries for a specific monster type.
+    Returns all discoveries if no filter provided.
+
+    Query Params:
+        monster_type: Optional filter to get discoveries for a specific monster type
+
+    Response:
+        {
+            "discoveries": [
+                {
+                    "monster_type": "sloth",
+                    "task_category": "physical",
+                    "effectiveness": "super_effective"
+                },
+                ...
+            ]
+        }
+    """
+    query = supabase.table("type_discoveries").select(
+        "monster_type, task_category, effectiveness"
+    ).eq("user_id", user.id)
+
+    if monster_type:
+        query = query.eq("monster_type", monster_type)
+
+    result = await query.execute()
+    return {"discoveries": result.data or []}
+
+
 @router.get("/current", operation_id="get_current_adventure")
 async def get_current_adventure(user = Depends(get_current_user)):
     """
-    Get the user's active adventure with monster info and app state.
+    Get the user's active adventure with monster info, app state, and discoveries.
     """
     # Fetch active adventure with monster
     try:
@@ -164,6 +201,16 @@ async def get_current_adventure(user = Depends(get_current_user)):
     # Calculate days remaining
     days_remaining = (deadline - user_today).days
     adventure['days_remaining'] = max(days_remaining, 0)
+
+    # Fetch discoveries for current monster's type
+    monster_type = adventure.get('monster', {}).get('monster_type')
+    if monster_type:
+        disc_res = await supabase.table("type_discoveries").select(
+            "task_category, effectiveness"
+        ).eq("user_id", user.id).eq("monster_type", monster_type).execute()
+        adventure['discoveries'] = disc_res.data or []
+    else:
+        adventure['discoveries'] = []
 
     return adventure
 

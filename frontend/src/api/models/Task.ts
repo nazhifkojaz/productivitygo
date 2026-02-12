@@ -9,7 +9,6 @@ export type Task = {
     daily_entry_id: string;
     is_completed?: boolean;
     proof_url?: (string | null);
-    assigned_score?: number;
     created_at: string;
 };
 

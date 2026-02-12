@@ -119,12 +119,43 @@ CREATE TABLE public.monsters (
     tier TEXT NOT NULL CHECK (tier IN ('easy', 'medium', 'hard', 'expert', 'boss')),
     base_hp INTEGER NOT NULL,
     description TEXT,
+    monster_type TEXT NOT NULL
+        CHECK (monster_type IN ('sloth','chaos','fog','burnout','stagnation','shadow','titan')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 COMMENT ON TABLE monsters IS 'Monster presets for Adventure Mode single-player gameplay';
 COMMENT ON COLUMN monsters.tier IS 'Difficulty tier: easy, medium, hard, expert, boss';
 COMMENT ON COLUMN monsters.base_hp IS 'Base HP for this monster. Copied to adventure at creation.';
+COMMENT ON COLUMN monsters.monster_type IS 'Elemental type: sloth, chaos, fog, burnout, stagnation, shadow, titan';
+
+-- ----------------------------------------------------------------------------
+-- 2.3.1 type_effectiveness — Type multiplier reference table
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.type_effectiveness (
+    monster_type TEXT NOT NULL,
+    task_category TEXT NOT NULL,
+    multiplier NUMERIC(2,1) NOT NULL CHECK (multiplier IN (0.5, 1.0, 1.5)),
+    PRIMARY KEY (monster_type, task_category)
+);
+
+COMMENT ON TABLE type_effectiveness IS 'Type effectiveness multipliers for adventure mode combat';
+COMMENT ON COLUMN type_effectiveness.multiplier IS '0.5 = resisted, 1.0 = neutral, 1.5 = super effective';
+
+-- ----------------------------------------------------------------------------
+-- 2.3.2 type_discoveries — User discovery progress
+-- ----------------------------------------------------------------------------
+CREATE TABLE public.type_discoveries (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+    monster_type TEXT NOT NULL,
+    task_category TEXT NOT NULL,
+    effectiveness TEXT NOT NULL CHECK (effectiveness IN ('super_effective', 'neutral', 'resisted')),
+    discovered_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    UNIQUE (user_id, monster_type, task_category)
+);
+
+COMMENT ON TABLE type_discoveries IS 'Tracks which type effectiveness each user has discovered through combat';
 
 -- ----------------------------------------------------------------------------
 -- 2.4 adventures — Single-player monster battles
@@ -205,6 +236,8 @@ CREATE TABLE public.tasks (
     is_optional BOOLEAN DEFAULT false,
     is_completed BOOLEAN DEFAULT false,
     proof_url TEXT,
+    category TEXT DEFAULT 'errand'
+        CHECK (category IN ('errand','focus','physical','creative','social','wellness','organization')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -253,6 +286,9 @@ CREATE INDEX IF NOT EXISTS idx_battles_completed_at ON battles(completed_at);
 
 -- Monsters
 CREATE INDEX IF NOT EXISTS idx_monsters_tier ON monsters(tier);
+
+-- Type discoveries
+CREATE INDEX IF NOT EXISTS idx_type_discoveries_user_monster ON type_discoveries(user_id, monster_type);
 
 -- Adventures
 CREATE INDEX IF NOT EXISTS idx_adventures_user_id ON adventures(user_id);
@@ -401,6 +437,21 @@ CREATE POLICY "Users can follow"
 
 CREATE POLICY "Users can unfollow"
     ON follows FOR DELETE USING (auth.uid() = follower_id);
+
+-- --- Type Effectiveness ---
+ALTER TABLE type_effectiveness ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Type effectiveness is viewable by everyone"
+    ON type_effectiveness FOR SELECT USING (true);
+
+-- --- Type Discoveries ---
+ALTER TABLE type_discoveries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own discoveries"
+    ON type_discoveries FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own discoveries"
+    ON type_discoveries FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 
 -- ============================================================================
@@ -751,6 +802,8 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 6.8 calculate_adventure_round — Process one PVE round
 -- ----------------------------------------------------------------------------
+-- Updated for Phase 3: Category-based damage calculation
+-- Each task calculates its own damage with type multiplier, then summed
 CREATE OR REPLACE FUNCTION calculate_adventure_round(
     adventure_uuid UUID,
     round_date DATE
@@ -761,12 +814,22 @@ AS $$
 DECLARE
     v_adventure RECORD;
     v_entry_id UUID;
+    v_monster_type TEXT;
     v_mandatory_total INT;
-    v_mandatory_completed INT;
-    v_optional_completed INT;
+    v_task_record RECORD;
+    v_task_base_damage NUMERIC;
+    v_multiplier NUMERIC;
+    v_effectiveness TEXT;
+    v_total_damage NUMERIC := 0;
     v_damage INT;
     v_new_hp INT;
 BEGIN
+    -- Get monster type first
+    SELECT m.monster_type INTO v_monster_type
+    FROM monsters m
+    JOIN adventures a ON a.monster_id = m.id
+    WHERE a.id = adventure_uuid;
+
     -- Get adventure with row lock
     SELECT * INTO v_adventure
     FROM adventures
@@ -799,24 +862,61 @@ BEGIN
         RETURN;
     END IF;
 
-    -- Count tasks
-    SELECT
-        COUNT(*) FILTER (WHERE NOT is_optional),
-        COUNT(*) FILTER (WHERE is_completed AND NOT is_optional),
-        COUNT(*) FILTER (WHERE is_completed AND is_optional)
-    INTO v_mandatory_total, v_mandatory_completed, v_optional_completed
+    -- Count total mandatory tasks (for base damage calculation)
+    SELECT COUNT(*) FILTER (WHERE NOT is_optional)
+    INTO v_mandatory_total
     FROM tasks
     WHERE daily_entry_id = v_entry_id;
 
-    -- Calculate damage (capped at 120)
-    IF v_mandatory_total > 0 THEN
-        v_damage := LEAST(
-            (v_mandatory_completed::FLOAT / v_mandatory_total * 100)::INT + (v_optional_completed * 10),
-            120
-        );
-    ELSE
-        v_damage := LEAST(v_optional_completed * 10, 120);
-    END IF;
+    -- Loop through each COMPLETED task and calculate damage individually
+    FOR v_task_record IN
+        SELECT t.id, t.category, t.is_optional, t.is_completed
+        FROM tasks t
+        WHERE t.daily_entry_id = v_entry_id AND t.is_completed = true
+    LOOP
+        -- Calculate base damage for this task
+        IF v_task_record.is_optional THEN
+            v_task_base_damage := 10;
+        ELSE
+            -- Avoid division by zero
+            IF v_mandatory_total > 0 THEN
+                v_task_base_damage := 100::NUMERIC / v_mandatory_total;
+            ELSE
+                v_task_base_damage := 0;
+            END IF;
+        END IF;
+
+        -- Get type multiplier from type_effectiveness table
+        -- NULL category or missing entry defaults to 1.0 (neutral)
+        SELECT COALESCE(te.multiplier, 1.0)
+        INTO v_multiplier
+        FROM type_effectiveness te
+        WHERE te.monster_type = v_monster_type
+          AND te.task_category = v_task_record.category;
+
+        -- Accumulate damage
+        v_total_damage := v_total_damage + (v_task_base_damage * v_multiplier);
+
+        -- Determine effectiveness for discovery recording
+        IF v_multiplier >= 1.5 THEN
+            v_effectiveness := 'super_effective';
+        ELSIF v_multiplier <= 0.5 THEN
+            v_effectiveness := 'resisted';
+        ELSE
+            v_effectiveness := 'neutral';
+        END IF;
+
+        -- Record discovery (idempotent via ON CONFLICT)
+        -- Only record if we have a valid category
+        IF v_task_record.category IS NOT NULL THEN
+            INSERT INTO type_discoveries (user_id, monster_type, task_category, effectiveness, discovered_at)
+            VALUES (v_adventure.user_id, v_monster_type, v_task_record.category, v_effectiveness, now())
+            ON CONFLICT (user_id, monster_type, task_category) DO NOTHING;
+        END IF;
+    END LOOP;
+
+    -- Finalize damage: floor and cap at 180 (raised from 120 for SE bonus)
+    v_damage := LEAST(FLOOR(v_total_damage), 180)::INT;
 
     -- Apply damage (floor at 0)
     v_new_hp := GREATEST(v_adventure.monster_current_hp - v_damage, 0);
@@ -1058,55 +1158,125 @@ EXECUTE FUNCTION update_completed_tasks();
 
 DELETE FROM monsters;
 
-INSERT INTO monsters (name, emoji, tier, base_hp, description) VALUES
+INSERT INTO monsters (name, emoji, tier, base_hp, description, monster_type) VALUES
     -- Tier 1: Easy (100-200 HP) - 10 monsters
-    ('Lazy Slime', '🟢', 'easy', 100, 'Just five more minutes...'),
-    ('Snooze Sprite', '😴', 'easy', 110, 'Whispers "tomorrow is fine"'),
-    ('Distraction Rat', '🐀', 'easy', 120, 'Scurries through your focus'),
-    ('Excuse Imp', '👿', 'easy', 130, 'Always has a reason not to'),
-    ('Scroll Goblin', '📱', 'easy', 140, 'Have you seen this meme?'),
-    ('Couch Potato', '🥔', 'easy', 150, 'The gravity is strong with this one'),
-    ('Notification Gremlin', '🔔', 'easy', 160, '*ding* *ding* *ding*'),
-    ('I''ll Do It Later Larry', '🦥', 'easy', 180, 'Tomorrow''s problem, amirite?'),
-    ('The Snack Siren', '🍕', 'easy', 190, 'Psst... the fridge is calling'),
-    ('WiFi Vampire', '📶', 'easy', 200, 'Drains your time, not your blood'),
+    ('Lazy Slime', '🟢', 'easy', 100, 'Just five more minutes...', 'sloth'),
+    ('Snooze Sprite', '😴', 'easy', 110, 'Whispers "tomorrow is fine"', 'sloth'),
+    ('Distraction Rat', '🐀', 'easy', 120, 'Scurries through your focus', 'fog'),
+    ('Excuse Imp', '👿', 'easy', 130, 'Always has a reason not to', 'chaos'),
+    ('Scroll Goblin', '📱', 'easy', 140, 'Have you seen this meme?', 'fog'),
+    ('Couch Potato', '🥔', 'easy', 150, 'The gravity is strong with this one', 'sloth'),
+    ('Notification Gremlin', '🔔', 'easy', 160, '*ding* *ding* *ding*', 'fog'),
+    ('I''ll Do It Later Larry', '🦥', 'easy', 180, 'Tomorrow''s problem, amirite?', 'stagnation'),
+    ('The Snack Siren', '🍕', 'easy', 190, 'Psst... the fridge is calling', 'burnout'),
+    ('WiFi Vampire', '📶', 'easy', 200, 'Drains your time, not your blood', 'shadow'),
 
     -- Tier 2: Medium (200-320 HP) - 10 monsters
-    ('Procrastination Goblin', '👺', 'medium', 200, 'There''s still time...'),
-    ('Netflix Naga', '🐍', 'medium', 220, 'Just one more episode... or season'),
-    ('Comfort Zone Troll', '🧌', 'medium', 240, 'Why leave? It''s cozy here'),
-    ('Doom Scroller', '👁️', 'medium', 250, 'Infinite content, zero productivity'),
-    ('Snack Attack Wolf', '🐺', 'medium', 260, 'Hungry for your time (and snacks)'),
-    ('YouTube Rabbit', '🐰', 'medium', 270, 'Recommended for you is its weapon'),
-    ('Bed Gravity Bear', '🐻', 'medium', 280, 'Makes your bed extra magnetic'),
-    ('Reply Guy Wraith', '💬', 'medium', 290, 'Well, actually...'),
-    ('Tabocalypse', '🗂️', 'medium', 300, '47 open tabs and counting'),
-    ('The Benchwarmer', '🪑', 'medium', 320, 'Just warming up... indefinitely'),
+    ('Procrastination Goblin', '👺', 'medium', 200, 'There''s still time...', 'sloth'),
+    ('Netflix Naga', '🐍', 'medium', 220, 'Just one more episode... or season', 'fog'),
+    ('Comfort Zone Troll', '🧌', 'medium', 240, 'Why leave? It''s cozy here', 'stagnation'),
+    ('Doom Scroller', '👁️', 'medium', 250, 'Infinite content, zero productivity', 'fog'),
+    ('Snack Attack Wolf', '🐺', 'medium', 260, 'Hungry for your time (and snacks)', 'burnout'),
+    ('YouTube Rabbit', '🐰', 'medium', 270, 'Recommended for you is its weapon', 'fog'),
+    ('Bed Gravity Bear', '🐻', 'medium', 280, 'Makes your bed extra magnetic', 'sloth'),
+    ('Reply Guy Wraith', '💬', 'medium', 290, 'Well, actually...', 'shadow'),
+    ('Tabocalypse', '🗂️', 'medium', 300, '47 open tabs and counting', 'chaos'),
+    ('The Benchwarmer', '🪑', 'medium', 320, 'Just warming up... indefinitely', 'stagnation'),
 
     -- Tier 3: Hard (320-450 HP) - 10 monsters
-    ('Burnout Specter', '👻', 'hard', 320, 'Drains energy you didn''t know you had'),
-    ('Impostor Shade', '🎭', 'hard', 340, 'You''re faking it. Everyone knows.'),
-    ('FOMO Phantom', '💨', 'hard', 360, 'Everyone''s having fun without you'),
-    ('Perfectionism Knight', '⚔️', 'hard', 380, 'Nothing is ever good enough'),
-    ('Analysis Paralysis', '🤯', 'hard', 390, '47 pros/cons lists later...'),
-    ('Scope Creep', '🦎', 'hard', 400, 'While you''re at it, could you also...'),
-    ('Meeting Minotaur', '📅', 'hard', 410, 'This could''ve been an email'),
-    ('Decision Fatigue Demon', '🎰', 'hard', 420, 'What should I do? What SHOULD I do??'),
-    ('The Comparer', '👀', 'hard', 430, 'Their highlight reel vs your behind-the-scenes'),
-    ('Sunk Cost Succubus', '💸', 'hard', 450, 'But I''ve already invested so much...'),
+    ('Burnout Specter', '👻', 'hard', 320, 'Drains energy you didn''t know you had', 'burnout'),
+    ('Impostor Shade', '🎭', 'hard', 340, 'You''re faking it. Everyone knows.', 'shadow'),
+    ('FOMO Phantom', '💨', 'hard', 360, 'Everyone''s having fun without you', 'shadow'),
+    ('Perfectionism Knight', '⚔️', 'hard', 380, 'Nothing is ever good enough', 'stagnation'),
+    ('Analysis Paralysis', '🤯', 'hard', 390, '47 pros/cons lists later...', 'fog'),
+    ('Scope Creep', '🦎', 'hard', 400, 'While you''re at it, could you also...', 'chaos'),
+    ('Meeting Minotaur', '📅', 'hard', 410, 'This could''ve been an email', 'chaos'),
+    ('Decision Fatigue Demon', '🎰', 'hard', 420, 'What should I do? What SHOULD I do??', 'burnout'),
+    ('The Comparer', '👀', 'hard', 430, 'Their highlight reel vs your behind-the-scenes', 'shadow'),
+    ('Sunk Cost Succubus', '💸', 'hard', 450, 'But I''ve already invested so much...', 'stagnation'),
 
     -- Tier 4: Expert (450-550 HP) - 7 monsters
-    ('Anxiety Dragon', '🐲', 'expert', 450, 'What if everything goes wrong? What if??'),
-    ('Overwhelm Hydra', '🐉', 'expert', 470, 'Cut one task, two more appear'),
-    ('Comparison Demon', '😈', 'expert', 490, 'They''re your age and already...'),
-    ('The Infinite Backlog', '📚', 'expert', 500, 'It only grows. It never shrinks.'),
-    ('Email Avalanche', '📧', 'expert', 510, '1,247 unread and counting'),
-    ('Context Switch Chimera', '🦁', 'expert', 530, 'Three heads, three tasks, zero focus'),
-    ('Imposter Syndrome Supreme', '👑', 'expert', 550, 'The final form of self-doubt'),
+    ('Anxiety Dragon', '🐲', 'expert', 450, 'What if everything goes wrong? What if??', 'burnout'),
+    ('Overwhelm Hydra', '🐉', 'expert', 470, 'Cut one task, two more appear', 'titan'),
+    ('Comparison Demon', '😈', 'expert', 490, 'They''re your age and already...', 'shadow'),
+    ('The Infinite Backlog', '📚', 'expert', 500, 'It only grows. It never shrinks.', 'titan'),
+    ('Email Avalanche', '📧', 'expert', 510, '1,247 unread and counting', 'chaos'),
+    ('Context Switch Chimera', '🦁', 'expert', 530, 'Three heads, three tasks, zero focus', 'fog'),
+    ('Imposter Syndrome Supreme', '👑', 'expert', 550, 'The final form of self-doubt', 'shadow'),
 
     -- Tier 5: Boss (550-700 HP) - 5 monsters
-    ('The Void of Inaction', '🕳️', 'boss', 550, 'Where motivation goes to die'),
-    ('Chaos Titan', '🔥', 'boss', 600, 'Master of disorder and delay'),
-    ('The Procrastinator King', '👑', 'boss', 650, 'I''ll defeat you... eventually'),
-    ('Existential Dread Lord', '🌑', 'boss', 680, 'Does any of this even matter?'),
-    ('Burnout Phoenix', '🔴', 'boss', 700, 'Rises from the ashes of your motivation');
+    ('The Void of Inaction', '🕳️', 'boss', 550, 'Where motivation goes to die', 'stagnation'),
+    ('Chaos Titan', '🔥', 'boss', 600, 'Master of disorder and delay', 'chaos'),
+    ('The Procrastinator King', '👑', 'boss', 650, 'I''ll defeat you... eventually', 'sloth'),
+    ('Existential Dread Lord', '🌑', 'boss', 680, 'Does any of this even matter?', 'titan'),
+    ('Burnout Phoenix', '🔴', 'boss', 700, 'Rises from the ashes of your motivation', 'burnout');
+
+-- ----------------------------------------------------------------------------
+-- Type Effectiveness Seed Data (49 rows: 7 monster types × 7 task categories)
+-- ----------------------------------------------------------------------------
+-- Multipliers: 0.5 = resisted, 1.0 = neutral, 1.5 = super effective
+DELETE FROM type_effectiveness;
+
+INSERT INTO type_effectiveness (monster_type, task_category, multiplier) VALUES
+    -- Sloth: weak to Physical, Errand | resistant to Wellness, Social
+    ('sloth', 'errand', 1.5),
+    ('sloth', 'focus', 1.0),
+    ('sloth', 'physical', 1.5),
+    ('sloth', 'creative', 1.0),
+    ('sloth', 'social', 0.5),
+    ('sloth', 'wellness', 0.5),
+    ('sloth', 'organization', 1.0),
+
+    -- Chaos: weak to Organization, Errand | resistant to Creative, Focus
+    ('chaos', 'errand', 1.5),
+    ('chaos', 'focus', 0.5),
+    ('chaos', 'physical', 1.0),
+    ('chaos', 'creative', 0.5),
+    ('chaos', 'social', 1.0),
+    ('chaos', 'wellness', 1.0),
+    ('chaos', 'organization', 1.5),
+
+    -- Fog: weak to Focus, Organization | resistant to Physical, Errand
+    ('fog', 'errand', 0.5),
+    ('fog', 'focus', 1.5),
+    ('fog', 'physical', 0.5),
+    ('fog', 'creative', 1.0),
+    ('fog', 'social', 1.0),
+    ('fog', 'wellness', 1.0),
+    ('fog', 'organization', 1.5),
+
+    -- Burnout: weak to Wellness, Creative | resistant to Focus, Organization
+    ('burnout', 'errand', 1.0),
+    ('burnout', 'focus', 0.5),
+    ('burnout', 'physical', 1.0),
+    ('burnout', 'creative', 1.5),
+    ('burnout', 'social', 1.0),
+    ('burnout', 'wellness', 1.5),
+    ('burnout', 'organization', 0.5),
+
+    -- Stagnation: weak to Creative, Social | resistant to Errand, Organization
+    ('stagnation', 'errand', 0.5),
+    ('stagnation', 'focus', 1.0),
+    ('stagnation', 'physical', 1.0),
+    ('stagnation', 'creative', 1.5),
+    ('stagnation', 'social', 1.5),
+    ('stagnation', 'wellness', 1.0),
+    ('stagnation', 'organization', 0.5),
+
+    -- Shadow: weak to Social, Wellness | resistant to Physical, Creative
+    ('shadow', 'errand', 1.0),
+    ('shadow', 'focus', 1.0),
+    ('shadow', 'physical', 0.5),
+    ('shadow', 'creative', 0.5),
+    ('shadow', 'social', 1.5),
+    ('shadow', 'wellness', 1.5),
+    ('shadow', 'organization', 1.0),
+
+    -- Titan: weak to Focus, Physical | resistant to Social, Wellness
+    ('titan', 'errand', 1.0),
+    ('titan', 'focus', 1.5),
+    ('titan', 'physical', 1.5),
+    ('titan', 'creative', 1.0),
+    ('titan', 'social', 0.5),
+    ('titan', 'wellness', 0.5),
+    ('titan', 'organization', 1.0);

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime
 from uuid import UUID
 
@@ -24,6 +24,7 @@ class Profile(ProfileBase):
 class TaskBase(BaseModel):
     content: str
     is_optional: bool = False
+    category: Literal["errand", "focus", "physical", "creative", "social", "wellness", "organization"] = "errand"
 
 class TaskCreate(TaskBase):
     pass
@@ -76,6 +77,7 @@ class MonsterBase(BaseModel):
     tier: str  # easy, medium, hard, expert, boss
     base_hp: int
     description: Optional[str] = None
+    monster_type: Literal["sloth", "chaos", "fog", "burnout", "stagnation", "shadow", "titan"] = "sloth"
 
 
 class Monster(MonsterBase):

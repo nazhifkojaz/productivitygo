@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { RefreshCw, Loader } from 'lucide-react';
 import type { Monster } from '../hooks/useMonsters';
+import { getMonsterTypeMeta } from '../types/monster';
 
 interface MonsterSelectProps {
     monsters: Monster[];
@@ -127,9 +128,16 @@ export default function MonsterSelect({
                                     <h4 className="font-black text-sm leading-tight truncate">
                                         {monster.name}
                                     </h4>
-                                    <span className="text-xs font-bold text-gray-600">
-                                        HP: {monster.base_hp}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        {monster.monster_type && (
+                                            <span className="text-xs font-bold text-gray-700">
+                                                {getMonsterTypeMeta(monster.monster_type).emoji} {getMonsterTypeMeta(monster.monster_type).label}
+                                            </span>
+                                        )}
+                                        <span className="text-xs font-bold text-gray-600">
+                                            HP: {monster.base_hp}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 

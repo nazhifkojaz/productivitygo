@@ -156,8 +156,8 @@ describe('useTaskMutations', () => {
             });
 
             const tasksToSave = [
-                { content: 'Task 1', is_optional: false, assigned_score: 10 },
-                { content: 'Task 2', is_optional: true, assigned_score: 5 },
+                { content: 'Task 1', is_optional: false },
+                { content: 'Task 2', is_optional: true },
             ];
 
             result.current.saveDraftMutation.mutate(tasksToSave);
@@ -191,7 +191,7 @@ describe('useTaskMutations', () => {
 
             const { result } = renderHook(() => useTaskMutations(), { wrapper });
 
-            const tasksToSave = [{ content: 'Task 1', is_optional: false, assigned_score: 10 }];
+            const tasksToSave = [{ content: 'Task 1', is_optional: false }];
 
             result.current.saveDraftMutation.mutate(tasksToSave);
 
@@ -210,7 +210,7 @@ describe('useTaskMutations', () => {
                 wrapper: createWrapper(),
             });
 
-            const tasksToSave = [{ content: 'Task 1', is_optional: false, assigned_score: 10 }];
+            const tasksToSave = [{ content: 'Task 1', is_optional: false }];
 
             result.current.saveDraftMutation.mutate(tasksToSave);
 
@@ -234,7 +234,7 @@ describe('useTaskMutations', () => {
                 wrapper: createWrapper(),
             });
 
-            const tasksToSave = [{ content: 'Task 1', is_optional: false, assigned_score: 10 }];
+            const tasksToSave = [{ content: 'Task 1', is_optional: false }];
 
             result.current.saveDraftMutation.mutate(tasksToSave);
 
@@ -253,7 +253,7 @@ describe('useTaskMutations', () => {
                 wrapper: createWrapper(),
             });
 
-            const tasksToSave = [{ content: 'Task 1', is_optional: false, assigned_score: 10 }];
+            const tasksToSave = [{ content: 'Task 1', is_optional: false }];
 
             // Start the mutation
             result.current.saveDraftMutation.mutate(tasksToSave);

@@ -127,6 +127,7 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
             "daily_entry_id": entry_id,
             "content": t.content,
             "is_optional": False,
+            "category": t.category,
         })
 
     for t in optional_tasks:
@@ -134,6 +135,7 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
             "daily_entry_id": entry_id,
             "content": t.content,
             "is_optional": True,
+            "category": t.category,
         })
 
     if task_data:

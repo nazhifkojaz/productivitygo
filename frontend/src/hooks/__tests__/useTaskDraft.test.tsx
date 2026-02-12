@@ -48,9 +48,9 @@ describe('useTaskDraft', () => {
             vi.mocked(useAuth).mockReturnValue({ session: mockSession } as any);
 
             const mockDraftTasks = [
-                { content: 'Complete project', is_optional: false, assigned_score: 10 },
-                { content: 'Review PR', is_optional: false, assigned_score: 10 },
-                { content: 'Bonus task', is_optional: true, assigned_score: 5 },
+                { content: 'Complete project', is_optional: false },
+                { content: 'Review PR', is_optional: false },
+                { content: 'Bonus task', is_optional: true },
             ];
 
             vi.mocked(axios.get).mockResolvedValue({ data: mockDraftTasks });
@@ -113,7 +113,7 @@ describe('useTaskDraft', () => {
             vi.mocked(useAuth).mockReturnValue({ session: mockSession } as any);
 
             const mockDraftTasks = [
-                { content: 'Test task', is_optional: false, assigned_score: 10 },
+                { content: 'Test task', is_optional: false },
             ];
 
             vi.mocked(axios.get).mockResolvedValue({ data: mockDraftTasks });

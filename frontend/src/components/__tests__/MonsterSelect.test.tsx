@@ -13,6 +13,7 @@ describe('MonsterSelect', () => {
             tier: 'easy',
             base_hp: 100,
             description: 'Just five more minutes...',
+            monster_type: 'sloth',
         },
         {
             id: 'monster-2',
@@ -21,6 +22,7 @@ describe('MonsterSelect', () => {
             tier: 'medium',
             base_hp: 200,
             description: "There's still time...",
+            monster_type: 'sloth',
         },
         {
             id: 'monster-3',
@@ -29,6 +31,7 @@ describe('MonsterSelect', () => {
             tier: 'hard',
             base_hp: 320,
             description: 'Drains energy you did not know you had',
+            monster_type: 'burnout',
         },
         {
             id: 'monster-4',
@@ -37,6 +40,7 @@ describe('MonsterSelect', () => {
             tier: 'expert',
             base_hp: 450,
             description: 'What if everything goes wrong?',
+            monster_type: 'titan',
         },
     ];
 
@@ -233,6 +237,27 @@ describe('MonsterSelect', () => {
 
             const expertCard = screen.getByText('Anxiety Dragon').closest('button');
             expect(expertCard).toHaveClass('bg-red-100', 'border-red-500');
+        });
+    });
+
+    describe('monster type labels', () => {
+        it('renders monster type label on each card', () => {
+            render(<MonsterSelect {...defaultProps} />);
+
+            const slothLabels = screen.getAllByText('🦥 Sloth');
+            expect(slothLabels).toHaveLength(2); // Both sloth monsters
+            expect(screen.getByText('🔥 Burnout')).toBeInTheDocument();
+            expect(screen.getByText('🗿 Titan')).toBeInTheDocument();
+        });
+
+        it('does not render type label when monster_type is missing', () => {
+            const monstersWithoutType = mockMonsters.map(m => ({
+                ...m,
+                monster_type: undefined as any
+            }));
+            render(<MonsterSelect {...defaultProps} monsters={monstersWithoutType} />);
+
+            expect(screen.queryByText('🦥 Sloth')).not.toBeInTheDocument();
         });
     });
 

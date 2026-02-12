@@ -16,6 +16,7 @@ import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
 import { useTodayTasks } from '../hooks/useTodayTasks';
 import { useTaskMutations } from '../hooks/useTaskMutations';
+import { getTaskCategoryMeta } from '../types/task';
 
 export default function Dashboard() {
     const { session, user } = useAuth();
@@ -193,7 +194,7 @@ export default function Dashboard() {
     };
 
     // Calculate scores for scoreboard
-    const myScore = tasks.reduce((sum, t) => sum + (t.is_completed ? t.assigned_score : 0), 0);
+    const myScore = tasks.reduce((sum, t) => sum + (t.is_completed ? (t.is_optional ? 5 : 10) : 0), 0);
     const rivalScore = battle?.rival?.tasks_completed ? (battle?.rival?.tasks_completed * 10) : 0;
     const roundInfo = battle ? `ROUND ${battle?.rounds_played || 1}/5 · DAY ${battle?.current_day || 1} OF ${battle?.duration || 5}` : null;
 
@@ -345,6 +346,13 @@ export default function Dashboard() {
                                             onClick={() => toggleTask(task.id, !task.is_completed)}
                                         >
                                             <span className="font-mono text-xl font-black text-gray-400 w-6">0{index + 1}</span>
+
+                                            <span
+                                                className="text-lg"
+                                                title={getTaskCategoryMeta(task.category || 'errand').label}
+                                            >
+                                                {getTaskCategoryMeta(task.category || 'errand').emoji}
+                                            </span>
 
                                             <button
                                                 className={`w-8 h-8 border-2 border-black flex items-center justify-center transition-all ${

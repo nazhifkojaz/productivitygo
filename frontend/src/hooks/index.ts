@@ -24,6 +24,7 @@ export { useCurrentAdventure } from './useCurrentAdventure';
 export { useAdventureDetails } from './useAdventureDetails';
 export { useAdventureMutations } from './useAdventureMutations';
 export { useMonsters } from './useMonsters';
+export { useDiscoveries } from './useDiscoveries';
 
 // Social hooks
 export { useFollowers } from './useFollowers';

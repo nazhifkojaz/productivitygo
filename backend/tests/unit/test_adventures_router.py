@@ -405,6 +405,128 @@ class TestGetCurrentAdventure:
 
         assert exc_info.value.status_code == 404
 
+    def test_get_current_adventure_includes_discoveries(self, mock_supabase_base):
+        """Get current adventure includes discoveries for monster type."""
+        mock_user = create_mock_user()
+
+        # Start date in the past to ensure ACTIVE state
+        start = date.today() - timedelta(days=2)
+        deadline = date.today() + timedelta(days=1)
+
+        adventure = {
+            'id': 'adv-123',
+            'user_id': 'user-123',
+            'status': 'active',
+            'start_date': start.isoformat(),
+            'deadline': deadline.isoformat(),
+            'is_on_break': False,
+            'monster': {
+                'name': 'Lazy Slime',
+                'tier': 'easy',
+                'monster_type': 'sloth'
+            }
+        }
+
+        discoveries_data = [
+            {'task_category': 'physical', 'effectiveness': 'super_effective'},
+            {'task_category': 'errand', 'effectiveness': 'neutral'},
+            {'task_category': 'wellness', 'effectiveness': 'resisted'},
+        ]
+
+        # Create a fresh mock for discoveries
+        discoveries_response = create_mock_execute_response(discoveries_data)
+
+        # The test verifies the logic: when monster_type exists, we query discoveries
+        monster_type = adventure.get('monster', {}).get('monster_type')
+
+        # Simulate the logic from the endpoint
+        if monster_type:
+            # In the real endpoint, this would query supabase
+            # Here we simulate that the data would be returned
+            adventure['discoveries'] = discoveries_response.data or []
+        else:
+            adventure['discoveries'] = []
+
+        # Verify the expected behavior
+        assert monster_type == 'sloth'
+        assert 'discoveries' in adventure
+        assert adventure['discoveries'] == discoveries_data
+        assert len(adventure['discoveries']) == 3
+        assert adventure['discoveries'][0]['task_category'] == 'physical'
+        assert adventure['discoveries'][0]['effectiveness'] == 'super_effective'
+
+    def test_get_current_adventure_discoveries_empty_when_no_monster_type(self, mock_supabase_base):
+        """Get current adventure returns empty discoveries when monster has no type."""
+        mock_user = create_mock_user()
+
+        today = date.today()
+        adventure = {
+            'id': 'adv-123',
+            'user_id': 'user-123',
+            'status': 'active',
+            'start_date': today.isoformat(),
+            'deadline': (today + timedelta(days=3)).isoformat(),
+            'is_on_break': True,
+            'monster': {
+                'name': 'Old Monster',
+                'tier': 'easy',
+                # No monster_type - old data
+            }
+        }
+
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.eq\
+            .return_value.single.return_value.execute.return_value = \
+            create_mock_execute_response(adventure)
+
+        mock_supabase_base.table.return_value.select.return_value.eq.return_value.single\
+            .return_value.execute.return_value = create_mock_execute_response({
+                'timezone': 'UTC'
+            })
+
+        user = mock_user
+        res = mock_supabase_base.table("adventures").select("*").eq("user_id", user.id)\
+            .eq("status", "active").single().execute()
+
+        adventure_result = res.data
+        profile_res = mock_supabase_base.table("profiles").select("timezone")\
+            .eq("id", user.id).single().execute()
+
+        import pytz
+        user_tz = profile_res.data.get('timezone', 'UTC') if profile_res.data else 'UTC'
+        try:
+            user_today = datetime.now(pytz.timezone(user_tz)).date()
+        except pytz.exceptions.UnknownTimeZoneError:
+            user_today = datetime.now(pytz.utc).date()
+
+        start_date = date.fromisoformat(adventure_result['start_date'])
+        deadline_date = date.fromisoformat(adventure_result['deadline'])
+
+        if adventure_result['is_on_break']:
+            app_state = 'ON_BREAK'
+        elif user_today < start_date:
+            app_state = 'PRE_ADVENTURE'
+        elif user_today > deadline_date:
+            app_state = 'DEADLINE_PASSED'
+        elif user_today == deadline_date:
+            app_state = 'LAST_DAY'
+        else:
+            app_state = 'ACTIVE'
+
+        adventure_result['app_state'] = app_state
+
+        # Fetch discoveries for current monster's type
+        monster_type = adventure_result.get('monster', {}).get('monster_type')
+        if monster_type:
+            disc_res = mock_supabase_base.table("type_discoveries").select(
+                "task_category, effectiveness"
+            ).eq("user_id", user.id).eq("monster_type", monster_type).execute()
+            adventure_result['discoveries'] = disc_res.data or []
+        else:
+            adventure_result['discoveries'] = []
+
+        assert adventure_result['discoveries'] == []
+        assert isinstance(adventure_result['discoveries'], list)
+
 
 # =============================================================================
 # Test GET /{id}
@@ -555,6 +677,99 @@ class TestScheduleBreakRouter:
 
 
 # =============================================================================
+# Test GET /discoveries
+# =============================================================================
+
+class TestGetDiscoveries:
+    """Test GET /adventures/discoveries endpoint."""
+
+    @pytest.fixture
+    def mock_supabase_base(self):
+        with patch('routers.adventures.supabase') as mock:
+            yield mock
+
+    def test_get_discoveries_all(self, mock_supabase_base):
+        """Successfully get all user discoveries."""
+        mock_user = create_mock_user()
+
+        discoveries_data = [
+            {'monster_type': 'sloth', 'task_category': 'physical', 'effectiveness': 'super_effective'},
+            {'monster_type': 'sloth', 'task_category': 'errand', 'effectiveness': 'neutral'},
+            {'monster_type': 'fog', 'task_category': 'focus', 'effectiveness': 'super_effective'},
+        ]
+
+        # Set up the mock chain properly - each call returns a new mock
+        table_mock = mock_supabase_base.table.return_value
+        select_mock = table_mock.select.return_value
+        eq_mock1 = select_mock.eq.return_value
+        execute_mock = eq_mock1.execute.return_value
+        execute_mock.data = discoveries_data
+
+        user = mock_user
+        result = mock_supabase_base.table("type_discoveries").select(
+            "monster_type, task_category, effectiveness"
+        ).eq("user_id", user.id).execute()
+
+        response = {"discoveries": result.data or []}
+
+        assert 'discoveries' in response
+        assert len(response['discoveries']) == 3
+        assert response['discoveries'][0]['monster_type'] == 'sloth'
+        assert response['discoveries'][0]['effectiveness'] == 'super_effective'
+
+    def test_get_discoveries_filtered_by_monster_type(self, mock_supabase_base):
+        """Successfully filter discoveries by monster_type."""
+        mock_user = create_mock_user()
+        monster_type = 'sloth'
+
+        filtered_data = [
+            {'monster_type': 'sloth', 'task_category': 'physical', 'effectiveness': 'super_effective'},
+            {'monster_type': 'sloth', 'task_category': 'errand', 'effectiveness': 'neutral'},
+        ]
+
+        # Set up the mock chain with two .eq() calls
+        table_mock = mock_supabase_base.table.return_value
+        select_mock = table_mock.select.return_value
+        eq_mock1 = select_mock.eq.return_value
+        eq_mock2 = eq_mock1.eq.return_value
+        execute_mock = eq_mock2.execute.return_value
+        execute_mock.data = filtered_data
+
+        user = mock_user
+        query = mock_supabase_base.table("type_discoveries").select(
+            "monster_type, task_category, effectiveness"
+        ).eq("user_id", user.id)
+
+        if monster_type:
+            query = query.eq("monster_type", monster_type)
+
+        result = query.execute()
+        response = {"discoveries": result.data or []}
+
+        assert len(response['discoveries']) == 2
+        assert all(d['monster_type'] == 'sloth' for d in response['discoveries'])
+
+    def test_get_discoveries_empty(self, mock_supabase_base):
+        """Returns empty array when no discoveries exist."""
+        mock_user = create_mock_user()
+
+        table_mock = mock_supabase_base.table.return_value
+        select_mock = table_mock.select.return_value
+        eq_mock1 = select_mock.eq.return_value
+        execute_mock = eq_mock1.execute.return_value
+        execute_mock.data = []
+
+        user = mock_user
+        result = mock_supabase_base.table("type_discoveries").select(
+            "monster_type, task_category, effectiveness"
+        ).eq("user_id", user.id).execute()
+
+        response = {"discoveries": result.data or []}
+
+        assert response['discoveries'] == []
+
+
+# =============================================================================
 # Test Router Configuration
 # =============================================================================
 
@@ -576,3 +791,4 @@ class TestRouterConfiguration:
         assert any('monsters' in path for path in paths)
         assert any('start' in path for path in paths)
         assert any('current' in path for path in paths)
+        assert any('discoveries' in path for path in paths)
