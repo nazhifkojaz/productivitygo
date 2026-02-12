@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import MonsterCard from '../MonsterCard';
 import { Adventure } from '../../hooks/useCurrentAdventure';
 
@@ -28,9 +29,11 @@ describe('MonsterCard', () => {
             tier: 'medium',
             base_hp: 200,
             description: "There's still time...",
+            monster_type: 'sloth',
         },
         app_state: 'ACTIVE',
         days_remaining: 3,
+        discoveries: [],
     };
 
     describe('rendering', () => {
@@ -202,6 +205,85 @@ describe('MonsterCard', () => {
             render(<MonsterCard adventure={noDaysAdventure} />);
 
             expect(screen.getByText('0d')).toBeInTheDocument();
+        });
+    });
+
+    describe('monster type badge', () => {
+        it('renders monster type badge when monster_type is present', () => {
+            render(<MonsterCard adventure={mockAdventure} />);
+
+            // The type badge should contain the sloth emoji from MONSTER_TYPES
+            // We check for the text content that includes both emoji and TYPE
+            const typeBadge = screen.getByText((content) => content.includes('🦥') && content.includes('SLOTH TYPE'));
+            expect(typeBadge).toBeInTheDocument();
+        });
+
+        it('does not render type badge when monster_type is missing', () => {
+            const noTypeAdventure = {
+                ...mockAdventure,
+                monster: { ...mockAdventure.monster!, monster_type: undefined as any }
+            };
+            render(<MonsterCard adventure={noTypeAdventure} />);
+
+            expect(screen.queryByText(/SLOTH TYPE/)).not.toBeInTheDocument();
+        });
+    });
+
+    describe('monster intel modal', () => {
+        it('opens modal when info button is clicked', async () => {
+            const user = userEvent.setup();
+            render(<MonsterCard adventure={mockAdventure} />);
+
+            const infoButton = screen.getByTitle('View Monster Intel');
+            await user.click(infoButton);
+
+            expect(screen.getByText('Monster Intel')).toBeInTheDocument();
+        });
+
+        it('closes modal when clicking outside', async () => {
+            const user = userEvent.setup();
+            render(<MonsterCard adventure={mockAdventure} />);
+
+            // Open modal
+            const infoButton = screen.getByTitle('View Monster Intel');
+            await user.click(infoButton);
+            expect(screen.getByText('Monster Intel')).toBeInTheDocument();
+
+            // Click outside (on the backdrop)
+            const backdrop = screen.getByText('Monster Intel').closest('.fixed');
+            await user.click(backdrop!);
+
+            expect(screen.queryByText('Monster Intel')).not.toBeInTheDocument();
+        });
+
+        it('shows empty state when no discoveries', async () => {
+            const user = userEvent.setup();
+            render(<MonsterCard adventure={mockAdventure} />);
+
+            const infoButton = screen.getByTitle('View Monster Intel');
+            await user.click(infoButton);
+
+            expect(screen.getByText(/No weaknesses discovered yet/)).toBeInTheDocument();
+        });
+
+        it('shows discovered matchups when discoveries exist', async () => {
+            const user = userEvent.setup();
+            const adventureWithDiscoveries = {
+                ...mockAdventure,
+                discoveries: [
+                    { task_category: 'physical', effectiveness: 'super_effective' },
+                    { task_category: 'errand', effectiveness: 'super_effective' },
+                    { task_category: 'wellness', effectiveness: 'resisted' },
+                ]
+            };
+            render(<MonsterCard adventure={adventureWithDiscoveries} />);
+
+            const infoButton = screen.getByTitle('View Monster Intel');
+            await user.click(infoButton);
+
+            // Use getAllByText to handle potential duplicates, check for non-empty array
+            expect(screen.getAllByText('SUPER EFFECTIVE!').length).toBeGreaterThan(0);
+            expect(screen.getAllByText('RESISTED...').length).toBeGreaterThan(0);
         });
     });
 

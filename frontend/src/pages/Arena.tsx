@@ -16,6 +16,7 @@ import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
 import { useTodayTasks } from '../hooks/useTodayTasks';
 import { useTaskMutations } from '../hooks/useTaskMutations';
+import { getTaskCategoryMeta } from '../types/task';
 
 export default function Dashboard() {
     const { session, user } = useAuth();
@@ -345,6 +346,13 @@ export default function Dashboard() {
                                             onClick={() => toggleTask(task.id, !task.is_completed)}
                                         >
                                             <span className="font-mono text-xl font-black text-gray-400 w-6">0{index + 1}</span>
+
+                                            <span
+                                                className="text-lg"
+                                                title={getTaskCategoryMeta(task.category || 'errand').label}
+                                            >
+                                                {getTaskCategoryMeta(task.category || 'errand').emoji}
+                                            </span>
 
                                             <button
                                                 className={`w-8 h-8 border-2 border-black flex items-center justify-center transition-all ${
