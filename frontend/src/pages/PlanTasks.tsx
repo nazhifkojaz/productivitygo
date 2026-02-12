@@ -146,13 +146,11 @@ export default function PlanTasks() {
                 content: t.content,
                 category: t.category,
                 is_optional: false,
-                assigned_score: 10
             })),
             ...optionalTasks.filter(t => t.content.trim()).map(t => ({
                 content: t.content,
                 category: t.category,
                 is_optional: true,
-                assigned_score: 5
             }))
         ];
 

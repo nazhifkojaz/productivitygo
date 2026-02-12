@@ -48,9 +48,9 @@ describe('useTodayTasks', () => {
             vi.mocked(useAuth).mockReturnValue({ session: mockSession } as any);
 
             const mockTasks = [
-                { id: 'task-1', content: 'Complete project', is_completed: false, is_optional: false, assigned_score: 10 },
-                { id: 'task-2', content: 'Review PR', is_completed: false, is_optional: false, assigned_score: 10 },
-                { id: 'task-3', content: 'Bonus task', is_completed: false, is_optional: true, assigned_score: 5 },
+                { id: 'task-1', content: 'Complete project', is_completed: false, is_optional: false },
+                { id: 'task-2', content: 'Review PR', is_completed: false, is_optional: false },
+                { id: 'task-3', content: 'Bonus task', is_completed: false, is_optional: true },
             ];
 
             vi.mocked(axios.get).mockResolvedValue({ data: mockTasks });
@@ -139,7 +139,7 @@ describe('useTodayTasks', () => {
             vi.mocked(useAuth).mockReturnValue({ session: mockSession } as any);
 
             const mockTasks = [
-                { id: 'task-1', content: 'Test task', is_completed: false, is_optional: false, assigned_score: 10 },
+                { id: 'task-1', content: 'Test task', is_completed: false, is_optional: false },
             ];
 
             vi.mocked(axios.get).mockResolvedValue({ data: mockTasks });

@@ -79,7 +79,6 @@ export interface Task {
     content: string;
     is_completed: boolean;
     is_optional: boolean;
-    assigned_score: number;
     category: TaskCategory;
 }
 
@@ -89,6 +88,5 @@ export interface Task {
 export interface TaskCreate {
     content: string;
     is_optional: boolean;
-    assigned_score: number;
     category?: TaskCategory;
 }

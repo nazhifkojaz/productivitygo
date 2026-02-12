@@ -194,7 +194,7 @@ export default function Dashboard() {
     };
 
     // Calculate scores for scoreboard
-    const myScore = tasks.reduce((sum, t) => sum + (t.is_completed ? t.assigned_score : 0), 0);
+    const myScore = tasks.reduce((sum, t) => sum + (t.is_completed ? (t.is_optional ? 5 : 10) : 0), 0);
     const rivalScore = battle?.rival?.tasks_completed ? (battle?.rival?.tasks_completed * 10) : 0;
     const roundInfo = battle ? `ROUND ${battle?.rounds_played || 1}/5 · DAY ${battle?.current_day || 1} OF ${battle?.duration || 5}` : null;
 
