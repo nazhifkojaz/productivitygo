@@ -119,7 +119,7 @@ CREATE TABLE public.monsters (
     tier TEXT NOT NULL CHECK (tier IN ('easy', 'medium', 'hard', 'expert', 'boss')),
     base_hp INTEGER NOT NULL,
     description TEXT,
-    monster_type TEXT
+    monster_type TEXT NOT NULL
         CHECK (monster_type IN ('sloth','chaos','fog','burnout','stagnation','shadow','titan')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
