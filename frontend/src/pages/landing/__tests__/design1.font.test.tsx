@@ -65,8 +65,8 @@ describe('Design1 Landing Page - Font Loading', () => {
       </BrowserRouter>
     );
 
-    // Find the root div with both min-h-screen and bg-[#FF6B6B]
-    const rootDiv = container.querySelector('div.min-h-screen.bg-\\[\\#FF6B6B\\]');
+    // Find the root div with min-h-screen - it uses bg-landing-coral token now
+    const rootDiv = container.querySelector('div.min-h-screen.bg-landing-coral');
     expect(rootDiv).toBeTruthy();
 
     // Verify it has the Space Grotesk font style

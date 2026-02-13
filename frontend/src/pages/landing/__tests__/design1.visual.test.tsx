@@ -66,14 +66,14 @@ describe('Design1 Landing Page - Visual Regression', () => {
     // We expect to find elements with inline background colors
     expect(elementsWithInlineBg.length).toBeGreaterThan(0);
 
-    // Verify the expected colors are present
+    // Verify the expected colors are present - now using CSS variables
     const colors = elementsWithInlineBg.map((el: Element) =>
       (el as HTMLElement).style.backgroundColor
     );
 
-    // Check for our feature colors in RGB format
-    expect(colors.some(c => c === 'rgb(255, 107, 107)' || c === '#FF6B6B')).toBe(true);
-    expect(colors.some(c => c === 'rgb(78, 205, 196)' || c === '#4ECDC4')).toBe(true);
-    expect(colors.some(c => c === 'rgb(149, 225, 211)' || c === '#95E1D3')).toBe(true);
+    // Check for CSS variables used for feature colors
+    expect(colors.some(c => c.includes('var(--color-landing-coral)'))).toBe(true);
+    expect(colors.some(c => c.includes('var(--color-landing-teal)'))).toBe(true);
+    expect(colors.some(c => c.includes('var(--color-landing-mint)'))).toBe(true);
   });
 });
