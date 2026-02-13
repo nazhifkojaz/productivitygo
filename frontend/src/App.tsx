@@ -14,6 +14,15 @@ import { OpenAPI } from './api';
 import { Toaster } from 'sonner';
 import { useProfile } from './hooks/useProfile';
 import TimezoneSync from './components/TimezoneSync';
+import LandingOrLobby from './components/LandingOrLobby';
+
+// Landing Page Design
+import ExperimentPage from './pages/landing/experiment';
+import Design1 from './pages/landing/design1';
+import Design2 from './pages/landing/design2';
+import Design3 from './pages/landing/design3';
+import Design4 from './pages/landing/design4';
+import Design5 from './pages/landing/design5';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -141,8 +150,15 @@ function App() {
           <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
           <Route path="/adventure-result/:adventureId" element={<ProtectedRoute><AdventureResult /></ProtectedRoute>} />
           <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
-          {/* Root redirect */}
-          <Route path="/" element={<Navigate to="/lobby" replace />} />
+          {/* Landing Page Design */}
+          <Route path="/exp" element={<ExperimentPage />} />
+          <Route path="/1" element={<Design1 />} />
+          <Route path="/2" element={<Design2 />} />
+          <Route path="/3" element={<Design3 />} />
+          <Route path="/4" element={<Design4 />} />
+          <Route path="/5" element={<Design5 />} />
+          {/* Root redirect - auth-aware: landing for visitors, lobby for authenticated */}
+          <Route path="/" element={<LandingOrLobby />} />
         </Routes>
         <Toaster position="top-right" richColors closeButton />
       </AuthProvider>
