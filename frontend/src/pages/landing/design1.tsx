@@ -6,12 +6,7 @@ export default function Design1() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#FF6B6B]">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap');
-        body { font-family: 'Space Grotesk', sans-serif; }
-      `}</style>
-
+    <div className="min-h-screen bg-[#FF6B6B]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       {/* Hero Section */}
       <section className="min-h-screen relative overflow-hidden flex items-center justify-center">
         {/* Geometric Background */}
