@@ -170,6 +170,19 @@ async def get_current_adventure(user = Depends(get_current_user)):
 
     adventure = res.data
 
+    # --- LAZY EVALUATION TRIGGER (Backup) ---
+    # Process any missed rounds before returning adventure data
+    # This ensures adventure state is up-to-date even if app was sleeping
+    if adventure['status'] == 'active':
+        from utils.adventure_processor import process_adventure_rounds
+        rounds_processed = await process_adventure_rounds(adventure)
+        if rounds_processed > 0:
+            # Reload adventure to get updated status/current_round/HP
+            adventure_reload = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
+                .eq("id", adventure['id']).single().execute()
+            if adventure_reload.data:
+                adventure = adventure_reload.data
+
     # Get user timezone for app state calculation
     profile_res = await supabase.table("profiles").select("timezone")\
         .eq("id", user.id).single().execute()
@@ -235,6 +248,18 @@ async def get_adventure_details(adventure_id: str, user = Depends(get_current_us
     # Verify ownership
     if adventure['user_id'] != user.id:
         raise HTTPException(status_code=403, detail="Not your adventure")
+
+    # --- LAZY EVALUATION TRIGGER (Backup) ---
+    # Process any missed rounds before returning adventure data
+    if adventure['status'] == 'active':
+        from utils.adventure_processor import process_adventure_rounds
+        rounds_processed = await process_adventure_rounds(adventure)
+        if rounds_processed > 0:
+            # Reload adventure to get updated status/current_round/HP
+            adventure_reload = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
+                .eq("id", adventure_id).single().execute()
+            if adventure_reload.data:
+                adventure = adventure_reload.data
 
     # Fetch daily breakdown
     entries_res = await supabase.table("daily_entries").select("date, daily_xp")\
