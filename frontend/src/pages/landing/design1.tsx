@@ -6,15 +6,15 @@ export default function Design1() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[#FF6B6B]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+    <div className="min-h-screen bg-landing-coral" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       {/* Hero Section */}
       <section className="min-h-screen relative overflow-hidden flex items-center justify-center">
         {/* Geometric Background */}
         <div className="absolute inset-0">
-          <div className="absolute top-20 left-10 w-96 h-96 bg-[#4ECDC4] border-8 border-black rotate-12 -z-10" />
-          <div className="absolute bottom-20 right-10 w-80 h-80 bg-[#FFE66D] border-8 border-black -rotate-6 -z-10" />
-          <div className="absolute top-40 right-20 w-64 h-64 bg-[#95E1D3] border-8 border-black rotate-45 -z-10" />
-          <div className="absolute bottom-40 left-20 w-72 h-72 bg-[#F38181] border-8 border-black -rotate-12 -z-10" />
+          <div className="absolute top-20 left-10 w-96 h-96 bg-landing-teal border-8 border-black rotate-12 -z-10" />
+          <div className="absolute bottom-20 right-10 w-80 h-80 bg-landing-yellow border-8 border-black -rotate-6 -z-10" />
+          <div className="absolute top-40 right-20 w-64 h-64 bg-landing-mint border-8 border-black rotate-45 -z-10" />
+          <div className="absolute bottom-40 left-20 w-72 h-72 bg-landing-salmon border-8 border-black -rotate-12 -z-10" />
         </div>
 
         <div className="max-w-6xl mx-auto px-6 relative z-10">
@@ -43,14 +43,14 @@ export default function Design1() {
 
         {/* Scroll Indicator */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
-          <div className="w-8 h-12 border-4 border-black rounded-full flex items-start justify-center p-2 bg-[#FFE66D]">
+          <div className="w-8 h-12 border-4 border-black rounded-full flex items-start justify-center p-2 bg-landing-yellow">
             <div className="w-2 h-2 bg-black rounded-full" />
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="py-24 px-6 bg-[#FFE66D]">
+      <section className="py-24 px-6 bg-landing-yellow">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-5xl font-bold text-black mb-16 text-center tracking-tighter">
             LEVEL UP YOUR LIFE
@@ -58,9 +58,9 @@ export default function Design1() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon: Target, title: "SLAY MONSTERS", desc: "Defeat task monsters by completing your daily goals", bgColor: "#FF6B6B" },
-              { icon: Zap, title: "BATTLE RIVALS", desc: "Challenge friends to productivity duels", bgColor: "#4ECDC4" },
-              { icon: Trophy, title: "EARN REWARDS", desc: "Unlock achievements and level up", bgColor: "#95E1D3" }
+              { icon: Target, title: "SLAY MONSTERS", desc: "Defeat task monsters by completing your daily goals", bgColor: "var(--color-landing-coral)" },
+              { icon: Zap, title: "BATTLE RIVALS", desc: "Challenge friends to productivity duels", bgColor: "var(--color-landing-teal)" },
+              { icon: Trophy, title: "EARN REWARDS", desc: "Unlock achievements and level up", bgColor: "var(--color-landing-mint)" }
             ].map((feature, i) => (
               <motion.div
                 key={i}
@@ -85,9 +85,9 @@ export default function Design1() {
       </section>
 
       {/* About Section */}
-      <section className="py-24 px-6 bg-[#4ECDC4] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#FF6B6B] border-8 border-black rotate-45 translate-x-48 -translate-y-48 -z-10" />
-        
+      <section className="py-24 px-6 bg-landing-teal relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-landing-coral border-8 border-black rotate-45 translate-x-48 -translate-y-48 -z-10" />
+
         <div className="max-w-4xl mx-auto relative z-10">
           <motion.div
             initial={{ x: -100, opacity: 0 }}
@@ -96,7 +96,7 @@ export default function Design1() {
             className="bg-white border-4 border-black p-12 shadow-[12px_12px_0_0_#000]"
           >
             <div className="flex flex-col md:flex-row gap-8 items-center">
-              <div className="w-48 h-48 bg-[#FFE66D] border-4 border-black flex items-center justify-center flex-shrink-0">
+              <div className="w-48 h-48 bg-landing-yellow border-4 border-black flex items-center justify-center flex-shrink-0">
                 <div className="text-center">
                   <div className="text-6xl font-bold text-black">99</div>
                   <div className="text-sm font-bold text-black">LVL</div>
@@ -121,7 +121,7 @@ export default function Design1() {
       </section>
 
       {/* Buy Me a Coffee Section */}
-      <section className="py-24 px-6 bg-[#95E1D3]">
+      <section className="py-24 px-6 bg-landing-mint">
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
@@ -129,7 +129,7 @@ export default function Design1() {
             viewport={{ once: true }}
             className="bg-white border-4 border-black p-12 shadow-[12px_12px_0_0_#000]"
           >
-            <Coffee className="w-20 h-20 mx-auto mb-6 text-[#FF6B6B]" />
+            <Coffee className="w-20 h-20 mx-auto mb-6 text-landing-coral" />
             <h2 className="text-4xl font-bold text-black mb-6 tracking-tighter">SUPPORT THE QUEST</h2>
             <p className="text-xl text-black/90 mb-8">
               Love ProductivityGO? Buy me a coffee to keep the adventure going!
@@ -138,7 +138,7 @@ export default function Design1() {
               href="https://www.buymeacoffee.com/yourusername"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block bg-[#FF6B6B] text-white text-xl font-bold px-10 py-5 border-4 border-black hover:bg-black hover:text-white transition-all"
+              className="inline-block bg-landing-coral text-white text-xl font-bold px-10 py-5 border-4 border-black hover:bg-black hover:text-white transition-all"
             >
               BUY ME A COFFEE <Coffee className="inline ml-2" />
             </a>
@@ -151,10 +151,10 @@ export default function Design1() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-2xl font-bold">PRODUCTIVITYGO</div>
           <div className="flex items-center gap-6">
-            <a href="#" className="hover:text-[#FFE66D] transition-colors">
+            <a href="#" className="hover:text-landing-yellow transition-colors">
               <Github className="w-8 h-8" />
             </a>
-            <a href="#" className="hover:text-[#FFE66D] transition-colors">
+            <a href="#" className="hover:text-landing-yellow transition-colors">
               <Twitter className="w-8 h-8" />
             </a>
           </div>

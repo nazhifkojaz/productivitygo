@@ -1,0 +1,43 @@
+/**
+ * ProductivityGO Design Tokens
+ * Single source of truth for all color values
+ */
+
+@theme {
+  /* ===== NeoBrutalist App Palette ===== */
+  /* Used in: Lobby, Arena, PlanTasks, BattleResult, Login, Profile */
+  /* Rationale: Softer colors for daily app usage, eye-comfortable */
+
+  --color-neo-bg: #E8E4D9;
+  --color-neo-white: #FFFFFF;
+  --color-neo-black: #000000;
+
+  --color-neo-red: #E63946;
+  --color-neo-yellow: #F4A261;
+  --color-neo-blue: #457B9D;
+  --color-neo-green: #2A9D8F;
+  --color-neo-purple: #9D4EDD;
+  --color-neo-orange: #FB8500;
+
+  /* ===== Landing Page Palette ===== */
+  /* Used in: Landing page (marketing/entry point) */
+  /* Rationale: Vibrant, attention-grabbing colors for conversion */
+
+  --color-landing-coral: #FF6B6B;
+  --color-landing-teal: #4ECDC4;
+  --color-landing-yellow: #FFE66D;
+  --color-landing-mint: #95E1D3;
+  --color-landing-salmon: #F38181;
+
+  /* Shadows - Hard, no blur */
+  --shadow-neo-xs: 2px 2px 0 0 var(--color-neo-black);
+  --shadow-neo-sm: 3px 3px 0 0 var(--color-neo-black);
+  --shadow-neo: 4px 4px 0 0 var(--color-neo-black);
+  --shadow-neo-lg: 6px 6px 0 0 var(--color-neo-black);
+  --shadow-neo-xl: 8px 8px 0 0 var(--color-neo-black);
+
+  /* Border widths */
+  --border-width-3: 3px;
+  --border-width-4: 4px;
+  --border-width-5: 5px;
+}

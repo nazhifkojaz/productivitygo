@@ -1,34 +1,9 @@
 /* NeoBrutalist Design System */
-@theme {
-  /* Colors - High contrast, raw palette */
-  --color-neo-bg: #E8E4D9;
-  --color-neo-white: #FFFFFF;
-  --color-neo-black: #000000;
+/* Color tokens now defined in tokens.css - imported by index.css */
 
-  --color-neo-red: #E63946;
-  --color-neo-yellow: #F4A261;
-  --color-neo-blue: #457B9D;
-  --color-neo-green: #2A9D8F;
-  --color-neo-purple: #9D4EDD;
-  --color-neo-orange: #FB8500;
-
-  /* Typography */
-  --font-neo-display: 'Helvetica Neue', 'Inter', sans-serif;
-  --font-neo-mono: 'JetBrains Mono', 'Courier New', monospace;
-
-  /* Shadows - Hard, no blur */
-  --shadow-neo-xs: 2px 2px 0 0 var(--color-neo-black);
-  --shadow-neo-sm: 3px 3px 0 0 var(--color-neo-black);
-  --shadow-neo: 4px 4px 0 0 var(--color-neo-black);
-  --shadow-neo-lg: 6px 6px 0 0 var(--color-neo-black);
-  --shadow-neo-xl: 8px 8px 0 0 var(--color-neo-black);
-
-  /* Border widths */
-  --border-2: 2px solid var(--color-neo-black);
-  --border-3: 3px solid var(--color-neo-black);
-  --border-4: 4px solid var(--color-neo-black);
-  --border-5: 5px solid var(--color-neo-black);
-}
+/* Typography */
+--font-neo-display: 'Helvetica Neue', 'Inter', sans-serif;
+--font-neo-mono: 'JetBrains Mono', 'Courier New', monospace;
 
 /* Base styles */
 .neo-text-display {
