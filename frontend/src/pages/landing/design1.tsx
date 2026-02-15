@@ -1,12 +1,22 @@
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Target, Zap, Trophy, Coffee, Github, Twitter, ArrowRight } from 'lucide-react';
 
 export default function Design1() {
   const navigate = useNavigate();
+  const shouldReduceMotion = useReducedMotion();
 
   return (
-    <div className="min-h-screen bg-landing-coral" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+    <>
+      {/* Skip to main content link for keyboard navigation */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-black text-white px-4 py-2 font-bold z-50 border-2 border-white"
+      >
+        Skip to main content
+      </a>
+
+      <div id="main-content" className="min-h-screen bg-landing-coral" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
       {/* Hero Section */}
       <section className="min-h-screen relative overflow-hidden flex items-center justify-center">
         {/* Geometric Background */}
@@ -19,9 +29,9 @@ export default function Design1() {
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10">
           <motion.div
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6 }}
+            initial={shouldReduceMotion ? false : { y: 50, opacity: 0 }}
+            animate={shouldReduceMotion ? {} : { y: 0, opacity: 1 }}
+            transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.6 }}
             className="text-center"
           >
             <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-9xl font-bold text-black mb-4 sm:mb-6 tracking-tight sm:tracking-tighter">
@@ -31,8 +41,8 @@ export default function Design1() {
               Turn your to-do list into an epic adventure
             </p>
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={shouldReduceMotion ? {} : { scale: 1.05 }}
+              whileTap={shouldReduceMotion ? {} : { scale: 0.95 }}
               onClick={() => navigate('/login')}
               className="bg-black text-white text-base sm:text-lg md:text-xl font-bold px-6 sm:px-8 md:px-10 lg:px-12 py-3 sm:py-4 md:py-5 border-4 border-black hover:bg-white hover:text-black transition-all"
             >
@@ -64,9 +74,9 @@ export default function Design1() {
             ].map((feature, i) => (
               <motion.div
                 key={i}
-                initial={{ y: 50, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                transition={{ delay: i * 0.2 }}
+                initial={shouldReduceMotion ? false : { y: 50, opacity: 0 }}
+                whileInView={shouldReduceMotion ? {} : { y: 0, opacity: 1 }}
+                transition={shouldReduceMotion ? { duration: 0 } : { delay: i * 0.2 }}
                 viewport={{ once: true }}
                 className="bg-white border-4 border-black p-4 sm:p-6 md:p-8 hover:shadow-[8px_8px_0_0_#000] transition-shadow"
               >
@@ -90,8 +100,8 @@ export default function Design1() {
 
         <div className="max-w-4xl mx-auto relative z-10">
           <motion.div
-            initial={{ x: -100, opacity: 0 }}
-            whileInView={{ x: 0, opacity: 1 }}
+            initial={shouldReduceMotion ? false : { x: -100, opacity: 0 }}
+            whileInView={shouldReduceMotion ? {} : { x: 0, opacity: 1 }}
             viewport={{ once: true }}
             className="bg-white border-4 border-black p-6 sm:p-8 md:p-12 shadow-[8px_8px_0_0_#000] sm:shadow-[10px_10px_0_0_#000] md:shadow-[12px_12px_0_0_#000]"
           >
@@ -124,8 +134,8 @@ export default function Design1() {
       <section className="py-16 sm:py-20 md:py-24 px-4 sm:px-6 bg-landing-mint">
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            whileInView={{ scale: 1, opacity: 1 }}
+            initial={shouldReduceMotion ? false : { scale: 0.8, opacity: 0 }}
+            whileInView={shouldReduceMotion ? {} : { scale: 1, opacity: 1 }}
             viewport={{ once: true }}
             className="bg-white border-4 border-black p-6 sm:p-8 md:p-12 shadow-[8px_8px_0_0_#000] sm:shadow-[12px_12px_0_0_#000]"
           >
@@ -162,5 +172,6 @@ export default function Design1() {
         </div>
       </footer>
     </div>
+    </>
   );
 }
