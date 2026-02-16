@@ -25,7 +25,6 @@ interface UseProfileFormReturn {
     updateProfile: () => Promise<void>;
     updateAvatar: (emoji: string) => Promise<void>;
     updateTimezone: (timezone: string) => Promise<void>;
-    updatePassword: (password: string) => Promise<void>;
 
     // Refetch
     refetch: () => void;
@@ -43,7 +42,6 @@ export function useProfileForm(): UseProfileFormReturn {
         updateProfileMutation,
         updateAvatarMutation,
         updateTimezoneMutation,
-        updatePasswordMutation,
     } = useProfileMutations();
 
     // Local UI state
@@ -81,10 +79,6 @@ export function useProfileForm(): UseProfileFormReturn {
         await updateTimezoneMutation.mutateAsync(timezone);
     };
 
-    const updatePassword = async (password: string) => {
-        await updatePasswordMutation.mutateAsync(password);
-    };
-
     return {
         profile: profile || null,
         isLoading,
@@ -100,7 +94,6 @@ export function useProfileForm(): UseProfileFormReturn {
         updateProfile,
         updateAvatar,
         updateTimezone,
-        updatePassword,
         refetch: () => refetch(),
     };
 }

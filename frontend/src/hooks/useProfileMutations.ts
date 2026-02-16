@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 
 /**
@@ -60,25 +59,9 @@ export function useProfileMutations() {
         },
     });
 
-    // Update password mutation (uses Supabase directly)
-    const updatePasswordMutation = useMutation({
-        mutationFn: async (password: string) => {
-            const { error } = await supabase.auth.updateUser({ password });
-            if (error) throw error;
-        },
-        onSuccess: () => {
-            toast.success('Password updated successfully!');
-        },
-        onError: (error: any) => {
-            toast.error(error.message);
-            throw error; // Re-throw for caller to handle
-        },
-    });
-
     return {
         updateProfileMutation,
         updateAvatarMutation,
         updateTimezoneMutation,
-        updatePasswordMutation,
     };
 }

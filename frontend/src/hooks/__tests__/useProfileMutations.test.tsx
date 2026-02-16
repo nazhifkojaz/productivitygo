@@ -16,15 +16,6 @@ vi.mock('../../context/AuthContext', () => ({
     useAuth: vi.fn(),
 }));
 
-// Mock supabase
-vi.mock('../../lib/supabase', () => ({
-    supabase: {
-        auth: {
-            updateUser: vi.fn(),
-        },
-    },
-}));
-
 // Mock sonner toast
 vi.mock('sonner', () => ({
     toast: {
@@ -35,7 +26,6 @@ vi.mock('sonner', () => ({
 
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
 import { toast } from 'sonner';
 
 const createWrapper = () => {
@@ -220,47 +210,6 @@ describe('useProfileMutations', () => {
         });
     });
 
-    describe('updatePasswordMutation', () => {
-        it('updates password successfully', async () => {
-            const mockSession = { access_token: 'test-token' };
-            vi.mocked(useAuth).mockReturnValue({ session: mockSession } as any);
-
-            vi.mocked(supabase.auth.updateUser).mockResolvedValue({ error: null });
-
-            const { result } = renderHook(() => useProfileMutations(), {
-                wrapper: createWrapper(),
-            });
-
-            await result.current.updatePasswordMutation.mutateAsync('newPassword123');
-
-            expect(supabase.auth.updateUser).toHaveBeenCalledWith({ password: 'newPassword123' });
-            expect(toast.success).toHaveBeenCalledWith('Password updated successfully!');
-        });
-
-        it('throws error on Supabase failure', async () => {
-            const mockSession = { access_token: 'test-token' };
-            vi.mocked(useAuth).mockReturnValue({ session: mockSession } as any);
-
-            const mockError = new Error('Invalid password');
-            vi.mocked(supabase.auth.updateUser).mockResolvedValue({ error: mockError });
-
-            const { result } = renderHook(() => useProfileMutations(), {
-                wrapper: createWrapper(),
-            });
-
-            try {
-                await result.current.updatePasswordMutation.mutateAsync('weak');
-                // Should have thrown
-                expect(true).toBe(false);
-            } catch (error: any) {
-                expect(error.message).toBe('Invalid password');
-            }
-
-            await waitFor(() => expect(toast.error).toHaveBeenCalled());
-            expect(toast.error).toHaveBeenCalledWith('Invalid password');
-        });
-    });
-
     describe('when not authenticated', () => {
         it('mutations still return functions but will fail without token', () => {
             vi.mocked(useAuth).mockReturnValue({ session: null } as any);
@@ -272,7 +221,6 @@ describe('useProfileMutations', () => {
             expect(result.current.updateProfileMutation).toBeDefined();
             expect(result.current.updateAvatarMutation).toBeDefined();
             expect(result.current.updateTimezoneMutation).toBeDefined();
-            expect(result.current.updatePasswordMutation).toBeDefined();
         });
     });
 });
