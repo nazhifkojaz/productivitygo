@@ -36,7 +36,6 @@ export default function Profile() {
         updateProfile,
         updateAvatar,
         updateTimezone,
-        updatePassword,
     } = useProfileForm();
 
     // Pagination logic
@@ -206,7 +205,6 @@ export default function Profile() {
                         detectedTimezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
                         onTimezoneSync={updateTimezone}
                         onSignOut={signOut}
-                        onChangePassword={updatePassword}
                     />
 
                 </div>
