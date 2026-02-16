@@ -9,7 +9,6 @@ describe('SecuritySettings', () => {
         detectedTimezone: 'America/New_York',
         onTimezoneSync: vi.fn().mockResolvedValue(undefined),
         onSignOut: vi.fn(),
-        onChangePassword: vi.fn().mockResolvedValue(undefined),
     };
 
     describe('rendering', () => {
@@ -17,12 +16,6 @@ describe('SecuritySettings', () => {
             render(<SecuritySettings {...defaultProps} />);
 
             expect(screen.getByText('Settings')).toBeInTheDocument();
-        });
-
-        it('renders change password button initially', () => {
-            render(<SecuritySettings {...defaultProps} />);
-
-            expect(screen.getByText('Change Password')).toBeInTheDocument();
         });
 
         it('displays current timezone', () => {
@@ -47,79 +40,6 @@ describe('SecuritySettings', () => {
             render(<SecuritySettings {...defaultProps} />);
 
             expect(screen.getByText('Sign Out')).toBeInTheDocument();
-        });
-    });
-
-    describe('password change', () => {
-        it('expands password form when change password clicked', async () => {
-            const user = userEvent.setup();
-            render(<SecuritySettings {...defaultProps} />);
-
-            const changeButton = screen.getByText('Change Password');
-            await user.click(changeButton);
-
-            expect(screen.getByPlaceholderText('Enter new password')).toBeInTheDocument();
-            expect(screen.getByPlaceholderText('Confirm new password')).toBeInTheDocument();
-        });
-
-        it('closes form when cancel clicked', async () => {
-            const user = userEvent.setup();
-            render(<SecuritySettings {...defaultProps} />);
-
-            // Open form
-            await user.click(screen.getByText('Change Password'));
-            // Cancel
-            await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-            expect(screen.queryByPlaceholderText('Enter new password')).not.toBeInTheDocument();
-        });
-
-        it('calls onChangePassword when passwords match and submit clicked', async () => {
-            const user = userEvent.setup();
-            const mockChangePassword = vi.fn().mockResolvedValue(undefined);
-            render(<SecuritySettings {...defaultProps} onChangePassword={mockChangePassword} />);
-
-            await user.click(screen.getByText('Change Password'));
-
-            const newPasswordInput = screen.getByPlaceholderText('Enter new password');
-            const confirmPasswordInput = screen.getByPlaceholderText('Confirm new password');
-
-            await user.type(newPasswordInput, 'newPassword123');
-            await user.type(confirmPasswordInput, 'newPassword123');
-
-            const updateButton = screen.getByRole('button', { name: 'Update' });
-            await user.click(updateButton);
-
-            await waitFor(() => {
-                expect(mockChangePassword).toHaveBeenCalledWith('newPassword123');
-            });
-        });
-
-        it('does not call onChangePassword when passwords do not match', async () => {
-            const user = userEvent.setup();
-            const mockChangePassword = vi.fn().mockResolvedValue(undefined);
-            render(<SecuritySettings {...defaultProps} onChangePassword={mockChangePassword} />);
-
-            await user.click(screen.getByText('Change Password'));
-
-            const newPasswordInput = screen.getByPlaceholderText('Enter new password');
-            const confirmPasswordInput = screen.getByPlaceholderText('Confirm new password');
-
-            await user.type(newPasswordInput, 'newPassword123');
-            await user.type(confirmPasswordInput, 'differentPassword');
-
-            const updateButton = screen.getByRole('button', { name: 'Update' });
-            await user.click(updateButton);
-
-            expect(mockChangePassword).not.toHaveBeenCalled();
-        });
-
-        it('disables password change button when onChangePassword not provided', () => {
-            render(<SecuritySettings {...defaultProps} onChangePassword={undefined} />);
-
-            // Find button containing "Change Password" text
-            const changeButton = screen.getByText('Change Password').closest('button');
-            expect(changeButton).toBeDisabled();
         });
     });
 
@@ -182,8 +102,7 @@ describe('SecuritySettings', () => {
             const syncButton = screen.getByRole('button', { name: 'Sync' });
             await user.click(syncButton);
 
-            // Password inputs should still be accessible (different loading context)
-            // But we check that sync button is disabled
+            // Sync button should be disabled during loading
             expect(syncButton).toBeDisabled();
 
             resolveSync!();
