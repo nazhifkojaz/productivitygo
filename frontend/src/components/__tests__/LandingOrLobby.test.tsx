@@ -9,8 +9,8 @@ vi.mock('../../context/AuthContext', () => ({
   useAuth: vi.fn()
 }));
 
-// Mock Design1 to avoid rendering the full landing page
-vi.mock('../../pages/landing/design1', () => ({
+// Mock LandingPage to avoid rendering the full landing page
+vi.mock('../../pages/landing/LandingPage', () => ({
   default: () => <div data-testid="landing-page">Landing Page</div>
 }));
 

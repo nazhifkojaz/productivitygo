@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Target, Zap, Trophy, Coffee, Github, Twitter, ArrowRight } from 'lucide-react';
 
-export default function Design1() {
+export default function LandingPage() {
   const navigate = useNavigate();
   const shouldReduceMotion = useReducedMotion();
 

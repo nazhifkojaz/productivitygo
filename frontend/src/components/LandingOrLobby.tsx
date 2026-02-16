@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import Design1 from '../pages/landing/design1';
+import LandingPage from '../pages/landing/LandingPage';
 
 /**
  * Auth-aware root route component
@@ -25,5 +25,5 @@ export default function LandingOrLobby() {
   }
 
   // Unauthenticated visitors see landing page
-  return <Design1 />;
+  return <LandingPage />;
 }

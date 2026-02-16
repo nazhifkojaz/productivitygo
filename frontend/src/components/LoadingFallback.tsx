@@ -4,7 +4,6 @@
  * A consistent loading state used across lazy-loaded routes.
  * Uses the NeoBrutalist design system for visual consistency.
  */
-import React from 'react';
 
 interface LoadingFallbackProps {
   message?: string;

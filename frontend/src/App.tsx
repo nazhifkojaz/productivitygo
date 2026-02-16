@@ -19,14 +19,6 @@ const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const BattleResult = lazy(() => import('./pages/BattleResult'));
 const AdventureResult = lazy(() => import('./pages/AdventureResult'));
 
-// Landing Page Design - eager loaded (not lazy) since it's the entry point
-import ExperimentPage from './pages/landing/experiment';
-import Design1 from './pages/landing/design1';
-import Design2 from './pages/landing/design2';
-import Design3 from './pages/landing/design3';
-import Design4 from './pages/landing/design4';
-import Design5 from './pages/landing/design5';
-
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, loading } = useAuth();
@@ -154,13 +146,6 @@ function App() {
             <Route path="/battle-result/:battleId" element={<ProtectedRoute><BattleResult /></ProtectedRoute>} />
             <Route path="/adventure-result/:adventureId" element={<ProtectedRoute><AdventureResult /></ProtectedRoute>} />
             <Route path="/user/:userId" element={<ProtectedRoute><PublicProfile /></ProtectedRoute>} />
-            {/* Landing Page Design */}
-            <Route path="/exp" element={<ExperimentPage />} />
-            <Route path="/1" element={<Design1 />} />
-            <Route path="/2" element={<Design2 />} />
-            <Route path="/3" element={<Design3 />} />
-            <Route path="/4" element={<Design4 />} />
-            <Route path="/5" element={<Design5 />} />
             {/* Root redirect - auth-aware: landing for visitors, lobby for authenticated */}
             <Route path="/" element={<LandingOrLobby />} />
           </Routes>
