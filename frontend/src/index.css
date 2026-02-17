@@ -25,6 +25,16 @@
   }
 }
 
+@layer utilities {
+  /* Screen reader only utility for accessibility */
+  .sr-only {
+    @apply sr-only;
+  }
+  .not-sr-only {
+    @apply not-sr-only;
+  }
+}
+
 body {
   @apply bg-neo-bg text-neo-black font-sans;
 }
