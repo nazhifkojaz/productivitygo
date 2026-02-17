@@ -1,13 +1,25 @@
 /**
  * Profile stats from the backend
+ * Includes both PvP and adventure stats (Feature 3)
  */
 export interface ProfileStats {
+    // PvP stats
     battle_wins: number;
     total_xp: number;
     battle_fought: number;
     win_rate: string;
     tasks_completed: number;
     current_streak?: number;
+
+    // Adventure stats (Feature 3)
+    monster_rating?: number;
+    monster_defeats?: number;
+    monster_escapes?: number;
+    adventure_count?: number;
+    highest_tier_reached?: string;
+    total_damage_dealt?: number;
+    adventure_completion_rate?: string;
+    avg_damage_per_adventure?: number;
 }
 
 /**
@@ -48,6 +60,13 @@ export interface ProfileData {
     stats: ProfileStats;
     email: string;
     match_history?: MatchHistory[];
+
+    // Active game session state (Feature 2)
+    current_battle?: string | null;
+    current_adventure?: string | null;
+
+    // Account creation date for "Days Active" calculation (Feature 3)
+    created_at?: string;
 }
 
 /**
