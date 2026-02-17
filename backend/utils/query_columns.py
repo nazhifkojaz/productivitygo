@@ -48,7 +48,17 @@ PROFILE_BASIC = "id, username"
 PROFILE_TIMEZONE = "timezone"
 
 # For private profile endpoint (all user-visible fields)
-PROFILE_PRIVATE = "id, username, email, level, total_xp_earned, battle_count, battle_win_count, completed_tasks, avatar_emoji, timezone"
+# Includes current game session state and adventure stats for Feature 2/3
+PROFILE_PRIVATE = (
+    "id, username, email, level, total_xp_earned, "
+    "battle_count, battle_win_count, completed_tasks, "
+    "avatar_emoji, timezone, "
+    "current_battle, current_adventure, "
+    "adventure_count, monster_defeats, "
+    "monster_escapes, monster_rating, "
+    "highest_tier_reached, total_damage_dealt, "
+    "created_at"
+)
 
 # =============================================================================
 # Tasks Table Columns
