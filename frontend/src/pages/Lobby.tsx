@@ -6,6 +6,7 @@ import TabButton from '../components/TabButton';
 import UserCard from '../components/UserCard';
 import MonsterSelect from '../components/MonsterSelect';
 import StatCard from '../components/StatCard';
+import ActiveSessionBanner from '../components/ActiveSessionBanner';
 import { useProfile } from '../hooks/useProfile';
 import { useBattleInvites } from '../hooks/useBattleInvites';
 import { useFollowing } from '../hooks/useFollowing';
@@ -16,6 +17,8 @@ import { useBattleMutations } from '../hooks/useBattleMutations';
 import { useChallengeMutations } from '../hooks/useChallengeMutations';
 import { useMonsters } from '../hooks/useMonsters';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
+import { useCurrentBattle } from '../hooks/useCurrentBattle';
+import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
 
 export default function Lobby() {
     const navigate = useNavigate();
@@ -34,6 +37,52 @@ export default function Lobby() {
     const { data: monsterPool } = useMonsters();
     const { startAdventureMutation, refreshMonstersMutation } = useAdventureMutations();
     const { refetch: refetchProfile } = useProfile();
+
+    // Active session detection (Feature 2: Lobby Navigation Fix)
+    const hasActiveBattle = !!profile?.current_battle;
+    const hasActiveAdventure = !!profile?.current_adventure;
+    const { data: activeBattle } = useCurrentBattle();
+    const { data: activeAdventure } = useCurrentAdventure();
+
+    // Redirect to result page if session is completed
+    useEffect(() => {
+        if (activeBattle?.status === 'completed') {
+            navigate(`/battle-result/${activeBattle.id}`, { replace: true });
+        }
+        if (activeAdventure?.status === 'completed' || activeAdventure?.status === 'escaped') {
+            navigate(`/adventure-result/${activeAdventure.id}`, { replace: true });
+        }
+    }, [activeBattle, activeAdventure, navigate]);
+
+    // Determine if we should show the active session banner
+    const showActiveSessionBanner = hasActiveBattle || hasActiveAdventure;
+
+    // Prepare banner props
+    const getBannerProps = () => {
+        if (hasActiveAdventure && activeAdventure) {
+            const monster = activeAdventure.monster;
+            return {
+                sessionType: 'adventure' as const,
+                opponentName: monster?.name || 'Unknown Monster',
+                opponentEmoji: monster?.emoji,
+                currentDay: activeAdventure.current_round || 1,
+                totalDays: activeAdventure.duration || 5,
+            };
+        }
+        if (hasActiveBattle && activeBattle) {
+            const rival = activeBattle.user1?.id === profile?.id ? activeBattle.user2 : activeBattle.user1;
+            return {
+                sessionType: 'battle' as const,
+                opponentName: rival?.username || 'Rival',
+                opponentEmoji: rival?.avatar_emoji,
+                currentDay: activeBattle.current_round || 1,
+                totalDays: activeBattle.duration || 5,
+            };
+        }
+        return null;
+    };
+
+    const bannerProps = getBannerProps();
 
     // Social State
     const [searchQuery, setSearchQuery] = useState('');
@@ -175,6 +224,16 @@ export default function Lobby() {
                 </div>
             </div>
 
+            {/* Active Session Banner - shown when user has an active battle or adventure */}
+            {showActiveSessionBanner && bannerProps && (
+                <div className="max-w-6xl mx-auto mb-8">
+                    <ActiveSessionBanner
+                        {...bannerProps}
+                        onGoToArena={() => navigate('/arena')}
+                    />
+                </div>
+            )}
+
             <div className="max-w-6xl mx-auto grid md:grid-cols-12 gap-6">
                 {/* Left Column - Stats */}
                 <div className="md:col-span-4 space-y-6">
@@ -269,7 +328,8 @@ export default function Lobby() {
 
                 {/* Right Column - Battle Station & Social Hub */}
                 <div className="md:col-span-8 space-y-6">
-                    {/* Battle Station */}
+                    {/* Battle Station - only shown when no active session */}
+                    {!showActiveSessionBanner && (
                     <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
                         <div className="bg-[#E63946] text-white p-4 border-b-4 border-black">
                             <h2 className="text-xl font-black uppercase flex items-center gap-2">
@@ -354,8 +414,10 @@ export default function Lobby() {
                             </div>
                         </div>
                     </div>
+                    )}
 
-                    {/* Adventure Station */}
+                    {/* Adventure Station - only shown when no active session */}
+                    {!showActiveSessionBanner && (
                     <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
                         <div className="bg-[#9D4EDD] text-white p-4 border-b-4 border-black">
                             <h2 className="text-xl font-black uppercase flex items-center gap-2">
@@ -377,6 +439,7 @@ export default function Lobby() {
                             </button>
                         </div>
                     </div>
+                    )}
 
                     {/* Social Hub */}
                     <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
