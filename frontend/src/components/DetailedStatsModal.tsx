@@ -1,30 +1,13 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Swords, Skull, Zap, Target, Trophy, Calendar, Activity, Star } from 'lucide-react';
 import type { ProfileStats } from '../types/profile';
+import { formatNumber, formatTierEmoji } from '../lib/formatters';
 
 interface DetailedStatsModalProps {
     isOpen: boolean;
     stats: ProfileStats | null | undefined;
     createdAt?: string;
     onClose: () => void;
-}
-
-/**
- * Tier to emoji mapping for adventure display
- */
-const TIER_EMOJIS: Record<string, string> = {
-    easy: '🟢',
-    medium: '🟡',
-    hard: '🟠',
-    expert: '🔴',
-    boss: '👑',
-};
-
-/**
- * Helper to format tier as emoji
- */
-function formatTierEmoji(tier?: string): string {
-    return TIER_EMOJIS[tier || 'easy'] || '🟢';
 }
 
 /**
@@ -36,20 +19,6 @@ function calculateDaysActive(createdAt?: string): number {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - created.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-}
-
-/**
- * Helper to abbreviate large numbers
- */
-function formatNumber(num: number | undefined): string {
-    if (num === undefined || num === 0) return '0';
-    if (num >= 1000000) {
-        return `${(num / 1000000).toFixed(1)}M`;
-    }
-    if (num >= 1000) {
-        return `${(num / 1000).toFixed(1)}K`;
-    }
-    return num.toString();
 }
 
 /**

@@ -1,4 +1,5 @@
 import { Trophy, Star, Target, Swords, Skull, Zap } from 'lucide-react';
+import { formatNumber } from '../lib/formatters';
 
 interface ProfileStatsProps {
     stats?: {
@@ -19,20 +20,6 @@ interface ProfileStatsProps {
         avg_damage_per_adventure?: number;
     } | null;
     className?: string;
-}
-
-/**
- * Helper to abbreviate large numbers (1.2K, 1.5M)
- */
-function formatNumber(num: number | undefined): string {
-    if (num === undefined || num === 0) return '0';
-    if (num >= 1000000) {
-        return `${(num / 1000000).toFixed(1)}M`;
-    }
-    if (num >= 1000) {
-        return `${(num / 1000).toFixed(1)}K`;
-    }
-    return num.toString();
 }
 
 /**
