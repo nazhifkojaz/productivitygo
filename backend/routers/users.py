@@ -79,12 +79,31 @@ async def get_profile(user = Depends(get_current_user)):
         level = profile.get('level', 1)
         rank = calculate_rank(level, battle_count, battle_win_count)
 
+        # Adventure stats from PROFILE_PRIVATE (Feature 3)
+        adventure_count = profile.get("adventure_count", 0)
+        monster_defeats = profile.get("monster_defeats", 0)
+
         profile["stats"] = {
+            # PvP stats
             "battle_wins": battle_win_count,
             "total_xp": profile.get("total_xp_earned", 0),
             "battle_fought": battle_count,
             "win_rate": win_rate_str,
-            "tasks_completed": profile.get("completed_tasks", 0)
+            "tasks_completed": profile.get("completed_tasks", 0),
+
+            # Adventure stats (Feature 3)
+            "monster_rating": profile.get("monster_rating", 0),
+            "monster_defeats": monster_defeats,
+            "monster_escapes": profile.get("monster_escapes", 0),
+            "adventure_count": adventure_count,
+            "highest_tier_reached": profile.get("highest_tier_reached", "easy"),
+            "total_damage_dealt": profile.get("total_damage_dealt", 0),
+
+            # Derived stats (Feature 3)
+            "adventure_completion_rate": format_win_rate(monster_defeats, adventure_count),
+            "avg_damage_per_adventure": (
+                profile.get("total_damage_dealt", 0) // adventure_count
+            ) if adventure_count > 0 else 0,
         }
         profile["rank"] = rank
 
@@ -145,7 +164,7 @@ async def get_profile(user = Depends(get_current_user)):
         monster_ids = [adv.get('monster_id') for adv in adventure_history if adv.get('monster_id')]
         monsters_map = {}
         if monster_ids:
-            monsters_res = await supabase.table("monsters").select("id, name, emoji", "tier").in_("id", list(set(monster_ids))).execute()
+            monsters_res = await supabase.table("monsters").select("id, name, emoji, tier").in_("id", list(set(monster_ids))).execute()
             monsters_map = {m['id']: m for m in monsters_res.data}
 
         # Enrich adventure history
@@ -241,7 +260,10 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
     async def fetch_profile_data(user_id: str):
         """Fetch profile with retry on connection errors"""
         return await supabase.table("profiles").select(
-            "id, username, level, email, avatar_emoji, battle_win_count, total_xp_earned, battle_count, completed_tasks"
+            "id, username, level, email, avatar_emoji, battle_win_count, total_xp_earned, "
+            "battle_count, completed_tasks, adventure_count, monster_defeats, "
+            "monster_escapes, monster_rating, highest_tier_reached, total_damage_dealt, "
+            "created_at"
         ).eq("id", user_id).single().execute()
 
     try:
@@ -279,6 +301,10 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
         battle_count = profile.get('battle_count', 0)
         battle_win_count = profile.get('battle_win_count', 0)
         win_rate_str = format_win_rate(battle_win_count, battle_count)
+
+        # Adventure stats (Feature 3)
+        adventure_count = profile.get('adventure_count', 0)
+        monster_defeats = profile.get('monster_defeats', 0)
 
         # Calculate rank
         level = profile.get('level', 1)
@@ -334,12 +360,28 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
             "avatar_emoji": profile.get('avatar_emoji', '😀'),  # Default to smiley
             "is_following": is_following,
             "stats": {
+                # PvP stats
                 "battle_wins": battle_win_count,
                 "total_xp": profile.get('total_xp_earned', 0),
                 "battle_fought": battle_count,
                 "win_rate": win_rate_str,
-                "tasks_completed": profile.get("completed_tasks", 0)
+                "tasks_completed": profile.get("completed_tasks", 0),
+
+                # Adventure stats (Feature 3)
+                "monster_rating": profile.get("monster_rating", 0),
+                "monster_defeats": monster_defeats,
+                "monster_escapes": profile.get("monster_escapes", 0),
+                "adventure_count": adventure_count,
+                "highest_tier_reached": profile.get("highest_tier_reached", "easy"),
+                "total_damage_dealt": profile.get("total_damage_dealt", 0),
+
+                # Derived stats (Feature 3)
+                "adventure_completion_rate": format_win_rate(monster_defeats, adventure_count),
+                "avg_damage_per_adventure": (
+                    profile.get("total_damage_dealt", 0) // adventure_count
+                ) if adventure_count > 0 else 0,
             },
+            "created_at": profile.get("created_at"),
             "match_history": enriched_history
         }
 
