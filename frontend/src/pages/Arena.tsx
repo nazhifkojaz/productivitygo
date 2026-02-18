@@ -16,6 +16,7 @@ import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
 import { useTodayTasks } from '../hooks/useTodayTasks';
 import { useTaskMutations } from '../hooks/useTaskMutations';
+import { useMidnightCountdown } from '../hooks/useMidnightCountdown';
 import { getTaskCategoryMeta } from '../types/task';
 
 export default function Dashboard() {
@@ -25,7 +26,7 @@ export default function Dashboard() {
     const { data: profile } = useProfile();
     const { data: adventure, isLoading: adventureLoading } = useCurrentAdventure();
     const { abandonAdventureMutation, scheduleBreakMutation } = useAdventureMutations();
-    const [timeLeft, setTimeLeft] = useState<string>('');
+    const timeLeft = useMidnightCountdown(profile?.timezone);
 
     // Determine game mode - adventure takes priority if both exist
     const isAdventureMode = !!adventure && !battle;
@@ -46,37 +47,6 @@ export default function Dashboard() {
     });
 
     const { completeTaskMutation } = useTaskMutations();
-
-    // Countdown timer for end of day
-    useEffect(() => {
-        if (!profile?.timezone) return;
-
-        const updateCountdown = () => {
-            const now = new Date();
-
-            // Calculate midnight in user's timezone
-            const userNowStr = now.toLocaleString('en-US', { timeZone: profile.timezone });
-            const userNow = new Date(userNowStr);
-
-            // Calculate tomorrow midnight in user's timezone
-            const tomorrowMidnight = new Date(userNow);
-            tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
-            tomorrowMidnight.setHours(0, 0, 0, 0);
-
-            // Calculate difference
-            const diff = tomorrowMidnight.getTime() - userNow.getTime();
-            const hours = Math.floor(diff / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-            setTimeLeft(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-        };
-
-        updateCountdown();
-        const interval = setInterval(updateCountdown, 1000);
-
-        return () => clearInterval(interval);
-    }, [profile]);
 
     // Countdown timer for pre-battle/adventure start
     const [timeUntilBattle, setTimeUntilBattle] = useState<string>('');

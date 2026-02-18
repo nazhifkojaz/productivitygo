@@ -7,6 +7,7 @@ import { useProfile } from '../hooks/useProfile';
 import { useTaskQuota } from '../hooks/useTaskQuota';
 import { useTaskDraft } from '../hooks/useTaskDraft';
 import { useTaskMutations } from '../hooks/useTaskMutations';
+import { useMidnightCountdown } from '../hooks/useMidnightCountdown';
 import { TASK_CATEGORIES } from '../types/task';
 
 interface TaskInput {
@@ -22,11 +23,11 @@ export default function PlanTasks() {
         { content: '', category: 'errand' },
         { content: '', category: 'errand' }
     ]);
-    const [timeLeft, setTimeLeft] = useState<string>("");
     const [initializedQuota, setInitializedQuota] = useState<number | null>(null);
     const [showCategoryInfo, setShowCategoryInfo] = useState(false);
 
     const userTimezone = profile?.timezone || 'UTC';
+    const timeLeft = useMidnightCountdown(userTimezone);
 
     // Use React Query hooks for data fetching
     const { data: quota = 3, isLoading: quotaLoading } = useTaskQuota();
@@ -82,33 +83,6 @@ export default function PlanTasks() {
         setOptionalTasks(optionalFill);
         setInitializedQuota(quota);
     }, [draftTasks, quota, initializedQuota]);
-
-    // Countdown Timer - separate effect to use userTimezone
-    useEffect(() => {
-        const timer = setInterval(() => {
-            // Calculate midnight in user's timezone
-            const now = new Date();
-
-            // Get current time in user's timezone
-            const userNowStr = now.toLocaleString('en-US', { timeZone: userTimezone });
-            const userNow = new Date(userNowStr);
-
-            // Calculate tomorrow midnight in user's timezone
-            const tomorrowMidnight = new Date(userNow);
-            tomorrowMidnight.setDate(tomorrowMidnight.getDate() + 1);
-            tomorrowMidnight.setHours(0, 0, 0, 0);
-
-            // Calculate difference
-            const diff = tomorrowMidnight.getTime() - userNow.getTime();
-            const hours = Math.floor(diff / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-            setTimeLeft(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [userTimezone]);
 
     const updateMandatoryTask = (index: number, field: 'content' | 'category', value: string) => {
         const newTasks = [...mandatoryTasks];
