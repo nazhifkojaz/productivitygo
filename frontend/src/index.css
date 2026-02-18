@@ -12,17 +12,6 @@
   .btn-neo:active {
     @apply translate-x-[4px] translate-y-[4px] shadow-none;
   }
-
-  .card-neo {
-    @apply bg-neo-white border-4 border-black shadow-neo-lg p-4;
-  }
-
-  .input-neo {
-    @apply w-full px-4 py-3 border-3 border-black shadow-neo-sm focus:outline-none transition-all;
-  }
-  .input-neo:focus {
-    box-shadow: 4px 4px 0 0 var(--color-neo-blue);
-  }
 }
 
 @layer utilities {

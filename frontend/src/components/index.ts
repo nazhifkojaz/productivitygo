@@ -24,7 +24,6 @@ export { default as SecuritySettings } from './SecuritySettings';
 
 // User/Social components
 export { default as UserCard } from './UserCard';
-export { default as UserListItem } from './UserListItem';
 
 // Utility components
 export { default as TimezoneSync } from './TimezoneSync';
