@@ -37,3 +37,6 @@ export { useTodayTasks } from './useTodayTasks';
 export { useTaskQuota } from './useTaskQuota';
 export { useTaskDraft } from './useTaskDraft';
 export { useTaskMutations } from './useTaskMutations';
+
+// Utility hooks
+export { useMidnightCountdown } from './useMidnightCountdown';
