@@ -9,8 +9,11 @@ from services.battle_service import BattleService
 from utils.rank_calculations import calculate_rank
 from utils.stats import format_win_rate
 from utils.query_columns import BATTLE_RELOAD
+from utils.timezone import get_local_date
+from utils.logging_config import get_logger
 
 router = APIRouter(prefix="/battles", tags=["battles"])
+logger = get_logger(__name__)
 
 @router.get("/current", operation_id="get_current_battle")
 async def get_current_battle(user = Depends(get_current_user)):
@@ -64,11 +67,11 @@ async def get_current_battle(user = Depends(get_current_user)):
 
     # Handle None profiles (deleted users, database inconsistencies)
     if user_profile is None:
-        print(f"[WARNING] User profile missing for battle {battle['id']}, user {user.id}")
+        logger.warning(f"User profile missing for battle {battle['id']}, user {user.id}")
         user_profile = {'timezone': 'UTC', 'username': 'Unknown', 'level': 1}
 
     if rival_profile is None:
-        print(f"[WARNING] Rival profile missing for battle {battle['id']}, rival {rival_id}")
+        logger.warning(f"Rival profile missing for battle {battle['id']}, rival {rival_id}")
         # Default rival profile with safe defaults
         rival_profile = {
             'timezone': 'UTC',
@@ -82,11 +85,8 @@ async def get_current_battle(user = Depends(get_current_user)):
 
     user_tz = user_profile.get('timezone', 'UTC')
 
-    try:
-        user_today = datetime.now(pytz.timezone(user_tz)).date()
-    except pytz.exceptions.UnknownTimeZoneError:
-        # Invalid timezone in profile, fall back to UTC
-        user_today = datetime.now(pytz.utc).date()
+    # REFACTOR-007: Use centralized get_local_date from utils.timezone
+    user_today = get_local_date(user_tz)
 
     if battle['status'] == 'pending':
         app_state = 'PENDING_ACCEPTANCE'
@@ -116,14 +116,7 @@ async def get_current_battle(user = Depends(get_current_user)):
     tz1 = user1_data.get('timezone', 'UTC')
     tz2 = user2_data.get('timezone', 'UTC')
 
-    # 2. Helper to get local date
-    def get_local_date(tz_str):
-        """Get local date for timezone, falling back to UTC for invalid timezones."""
-        try:
-            return datetime.now(pytz.timezone(tz_str)).date()
-        except pytz.exceptions.UnknownTimeZoneError:
-            return datetime.now(pytz.utc).date()
-
+    # 2. REFACTOR-007: Use centralized get_local_date from utils.timezone
     date1 = get_local_date(tz1)
     date2 = get_local_date(tz2)
 
@@ -135,7 +128,7 @@ async def get_current_battle(user = Depends(get_current_user)):
             for r in range(current_round, rounds_to_process):
                 round_date = start_date + timedelta(days=r)
                 if date1 > round_date and date2 > round_date:
-                    print(f"Processing round {r} (Date {round_date}) - Passed for both.")
+                    logger.debug(f"Processing round {r} (Date {round_date}) - Passed for both")
                     try:
                         # BUG-004 FIX: Validate RPC response before incrementing round counter
                         rpc_result = await supabase.rpc("calculate_daily_round", {
@@ -145,7 +138,7 @@ async def get_current_battle(user = Depends(get_current_user)):
 
                         # Validate RPC succeeded before proceeding
                         if rpc_result.data is None:
-                            print(f"Lazy Eval: RPC returned None for round {r}, stopping processing")
+                            logger.warning(f"Lazy Eval: RPC returned None for round {r}, stopping processing")
                             break
 
                         # Update round count only after validation
@@ -153,7 +146,7 @@ async def get_current_battle(user = Depends(get_current_user)):
                         await supabase.table("battles").update({"current_round": current_round}).eq("id", battle['id']).execute()
 
                     except Exception as e:
-                        print(f"Error in lazy evaluation for round {r}: {e}")
+                        logger.error(f"Error in lazy evaluation for round {r} of battle {battle['id']}: {e}")
                         break
                 else:
                     break
@@ -161,16 +154,16 @@ async def get_current_battle(user = Depends(get_current_user)):
             battle['current_round'] = current_round
 
         if current_round >= duration:
-            print("Lazy Eval: Battle finished, marking as completed")
+            logger.info(f"Battle {battle['id']} is complete, marking as completed")
             try:
                 result = await BattleService.complete_battle(battle['id'])
                 if result:
                     battle['status'] = 'completed'
                     # Log if this was an idempotent call (already completed by another process)
                     if result.get('already_completed'):
-                        print(f"Lazy Eval: Battle {battle['id']} was already completed by another process (safe idempotent call)")
+                        logger.debug(f"Battle {battle['id']} was already completed by another process (safe idempotent call)")
             except Exception as e:
-                 print(f"Error auto-completing battle: {e}")
+                 logger.error(f"Error auto-completing battle {battle['id']}: {e}")
 
 
     # Fetch Rival's Tasks for Today (Only if IN_BATTLE or LAST_BATTLE_DAY)

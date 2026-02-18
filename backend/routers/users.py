@@ -12,6 +12,7 @@ from utils.rank_calculations import (
 from utils.stats import format_win_rate
 from utils.logging_config import get_logger
 from utils.query_columns import PROFILE_PRIVATE, BATTLE_MATCH_HISTORY, PROFILE_TIMEZONE, ADVENTURE_MATCH_HISTORY
+from utils.profile_helpers import batch_fetch_rival_usernames, enrich_battle_history
 from database import async_retry_on_connection_error
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -117,38 +118,9 @@ async def get_profile(user = Depends(get_current_user)):
 
         match_history = battles_res.data
 
-        # Collect unique rival IDs
-        rival_ids = set()
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
-            rival_ids.add(rival_id)
-
-        # Batch fetch all rivals in single query
-        rivals_map = {}
-        if rival_ids:
-            rivals_res = await supabase.table("profiles").select("id, username").in_("id", list(rival_ids)).execute()
-            rivals_map = {r['id']: r['username'] for r in rivals_res.data}
-
-        # Enrich match history with rival names
-        enriched_history = []
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
-            rival_name = rivals_map.get(rival_id, "Unknown")
-
-            result = "DRAW"
-            if battle.get('winner_id') == user.id:
-                result = "WIN"
-            elif battle.get('winner_id') == rival_id:
-                result = "LOSS"
-
-            enriched_history.append({
-                "id": battle['id'],
-                "date": battle['end_date'],
-                "rival": rival_name,
-                "result": result,
-                "duration": battle.get('duration', 5),
-                "type": "battle"
-            })
+        # REFACTOR-007: Use centralized rival batch-fetch and enrichment
+        rivals_map = await batch_fetch_rival_usernames(match_history, user.id)
+        enriched_history = enrich_battle_history(match_history, user.id, rivals_map, include_type=True)
 
         # Fetch Adventure History (Last 10 completed/escaped adventures)
         adventures_res = await supabase.table("adventures").select(ADVENTURE_MATCH_HISTORY)\
@@ -320,37 +292,10 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
 
         match_history = battles_res.data
 
-        # Collect unique rival IDs
-        rival_ids = set()
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
-            rival_ids.add(rival_id)
-
-        # Batch fetch all rivals in single query (fixes N+1 issue)
-        rivals_map = {}
-        if rival_ids:
-            rivals_res = await supabase.table("profiles").select("id, username").in_("id", list(rival_ids)).execute()
-            rivals_map = {r['id']: r['username'] for r in rivals_res.data}
-
-        # Enrich match history with rival names
-        enriched_history = []
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
-            rival_name = rivals_map.get(rival_id, "Unknown")
-
-            result = "DRAW"
-            if battle.get('winner_id') == user_id:
-                result = "WIN"
-            elif battle.get('winner_id') == rival_id:
-                result = "LOSS"
-
-            enriched_history.append({
-                "id": battle['id'],
-                "date": battle['end_date'],
-                "rival": rival_name,
-                "result": result,
-                "duration": battle.get('duration', 5)
-            })
+        # REFACTOR-007: Use centralized rival batch-fetch and enrichment
+        # Note: include_type=False because public profile only shows battles
+        rivals_map = await batch_fetch_rival_usernames(match_history, user_id)
+        enriched_history = enrich_battle_history(match_history, user_id, rivals_map, include_type=False)
 
         return {
             "id": profile['id'],

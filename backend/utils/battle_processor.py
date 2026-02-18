@@ -3,33 +3,17 @@ Utility functions for processing battle rounds and state updates.
 
 Shared logic used by both the scheduler and lazy evaluation.
 
-REFACTOR-007: Replaced print statements with centralized logging.
+REFACTOR-007:
+- Replaced print statements with centralized logging.
+- Replaced local get_local_date() with utils.timezone.get_local_date().
 """
 from datetime import date, timedelta, datetime
 import pytz
 from database import supabase
 from utils.logging_config import get_logger
+from utils.timezone import get_local_date
 
 logger = get_logger(__name__)
-
-
-def get_local_date(tz_str: str) -> date:
-    """
-    Get the current local date for a given timezone.
-
-    Falls back to UTC if timezone is invalid.
-
-    Args:
-        tz_str: Timezone string (e.g., 'America/New_York')
-
-    Returns:
-        Current date in the specified timezone, or UTC if invalid
-    """
-    try:
-        return datetime.now(pytz.timezone(tz_str)).date()
-    except pytz.exceptions.UnknownTimeZoneError:
-        # Invalid timezone string, fall back to UTC
-        return datetime.now(pytz.utc).date()
 
 
 async def process_battle_rounds(battle: dict) -> int:
