@@ -9,7 +9,6 @@ export interface ProfileStats {
     battle_fought: number;
     win_rate: string;
     tasks_completed: number;
-    current_streak?: number;
 
     // Adventure stats (Feature 3)
     monster_rating?: number;
@@ -81,4 +80,5 @@ export interface PublicProfileData {
     rank: string;
     stats: ProfileStats;
     match_history?: MatchHistory[];
+    created_at?: string; // For "Days Active" calculation in detailed stats modal
 }

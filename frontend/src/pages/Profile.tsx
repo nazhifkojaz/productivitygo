@@ -1,9 +1,10 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit2, ArrowLeft, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 import RankBadge from '../components/RankBadge';
 import ProfileStats from '../components/ProfileStats';
+import DetailedStatsModal from '../components/DetailedStatsModal';
 import ProfileEditForm from '../components/ProfileEditForm';
 import SecuritySettings from '../components/SecuritySettings';
 import { useProfileForm } from '../hooks/useProfileForm';
@@ -22,6 +23,7 @@ export default function Profile() {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
     const [historyPage, setHistoryPage] = useState(1);
+    const [showStatsModal, setShowStatsModal] = useState(false);
 
     // Use the custom hook for profile data and mutations
     const {
@@ -114,11 +116,6 @@ export default function Profile() {
                                     <span className="bg-[#457B9D] text-white px-3 py-1 border-2 border-black font-bold text-sm shadow-[2px_2px_0_0_#000]">
                                         [ {profile.rank?.toUpperCase() || 'CHALLENGER'} ]
                                     </span>
-                                    {profile.stats?.current_streak !== undefined && profile.stats.current_streak > 0 && (
-                                        <span className="bg-[#E63946] text-white px-3 py-1 border-2 border-black font-bold text-sm shadow-[2px_2px_0_0_#000]">
-                                            [ 🔥 {profile.stats.current_streak} ]
-                                        </span>
-                                    )}
                                 </div>
                             </div>
                         </div>
@@ -126,6 +123,16 @@ export default function Profile() {
                         {/* Stats Section - with border separator */}
                         <div className="border-t-3 border-black pt-8">
                             <ProfileStats stats={profile.stats} />
+
+                            {/* See Detailed Stats Button */}
+                            <div className="mt-6 flex justify-center">
+                                <button
+                                    onClick={() => setShowStatsModal(true)}
+                                    className="px-8 py-3 bg-[#457B9D] text-white font-black border-3 border-black shadow-[4px_4px_0_0_#000] flex items-center gap-2 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition-all active:translate-y-1 active:shadow-none"
+                                >
+                                    <TrendingUp className="w-5 h-5" aria-hidden="true" /> See Detailed Stats
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -263,6 +270,14 @@ export default function Profile() {
                         </motion.div>
                     </motion.div>
                 )}
+
+            {/* Detailed Stats Modal */}
+            <DetailedStatsModal
+                isOpen={showStatsModal}
+                stats={profile?.stats}
+                createdAt={profile?.created_at}
+                onClose={() => setShowStatsModal(false)}
+            />
             </AnimatePresence>
         </div>
     );

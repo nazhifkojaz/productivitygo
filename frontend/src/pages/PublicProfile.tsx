@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Swords, ArrowLeft, Trophy, Shield, Target, Star, X, Loader, Calendar } from 'lucide-react';
+import { Swords, ArrowLeft, X, Loader, Calendar, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import RankBadge from '../components/RankBadge';
+import ProfileStats from '../components/ProfileStats';
+import DetailedStatsModal from '../components/DetailedStatsModal';
 import { usePublicProfile } from '../hooks/usePublicProfile';
 import { useSocialMutations } from '../hooks/useSocialMutations';
 import { useChallengeMutations } from '../hooks/useChallengeMutations';
@@ -20,6 +22,7 @@ export default function PublicProfile() {
     const [showChallengeModal, setShowChallengeModal] = useState(false);
     const [startDate, setStartDate] = useState<string | null>(null);
     const [duration, setDuration] = useState(5);
+    const [showStatsModal, setShowStatsModal] = useState(false);
 
     const handleFollowToggle = async () => {
         if (!profile) return;
@@ -119,28 +122,17 @@ export default function PublicProfile() {
                     </div>
                 </div>
 
-                {/* Stats Grid - Design 1 colored cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div className="bg-[#F4A261] border-3 border-black shadow-[4px_4px_0_0_#000] p-4 text-center">
-                        <Trophy className="w-5 h-5 mx-auto mb-2 text-white" />
-                        <div className="text-2xl font-black text-white">{profile.stats.battle_wins}</div>
-                        <div className="text-[10px] font-black uppercase text-white">WINS</div>
-                    </div>
-                    <div className="bg-[#457B9D] border-3 border-black shadow-[4px_4px_0_0_#000] p-4 text-center">
-                        <Shield className="w-5 h-5 mx-auto mb-2 text-white" />
-                        <div className="text-2xl font-black text-white">{profile.stats.battle_fought}</div>
-                        <div className="text-[10px] font-black uppercase text-white">BATTLES</div>
-                    </div>
-                    <div className="bg-[#2A9D8F] border-3 border-black shadow-[4px_4px_0_0_#000] p-4 text-center">
-                        <Target className="w-5 h-5 mx-auto mb-2 text-white" />
-                        <div className="text-2xl font-black text-white">{profile.stats.tasks_completed}</div>
-                        <div className="text-[10px] font-black uppercase text-white">TASKS</div>
-                    </div>
-                    <div className="bg-[#9D4EDD] border-3 border-black shadow-[4px_4px_0_0_#000] p-4 text-center">
-                        <Star className="w-5 h-5 mx-auto mb-2 text-white" />
-                        <div className="text-2xl font-black text-white">{profile.stats.total_xp}</div>
-                        <div className="text-[10px] font-black uppercase text-white">TOTAL XP</div>
-                    </div>
+                {/* Stats Grid - Using shared ProfileStats component */}
+                <ProfileStats stats={profile.stats} className="mb-6" />
+
+                {/* See Detailed Stats Button */}
+                <div className="flex justify-center mb-8">
+                    <button
+                        onClick={() => setShowStatsModal(true)}
+                        className="px-8 py-3 bg-[#457B9D] text-white font-black border-3 border-black shadow-[4px_4px_0_0_#000] flex items-center gap-2 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition-all active:translate-y-1 active:shadow-none"
+                    >
+                        <TrendingUp className="w-5 h-5" aria-hidden="true" /> See Detailed Stats
+                    </button>
                 </div>
 
                 {/* Match History */}
@@ -244,6 +236,16 @@ export default function PublicProfile() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Detailed Stats Modal */}
+            {profile && (
+                <DetailedStatsModal
+                    isOpen={showStatsModal}
+                    stats={profile.stats}
+                    createdAt={profile.created_at}
+                    onClose={() => setShowStatsModal(false)}
+                />
             )}
         </div>
     );
