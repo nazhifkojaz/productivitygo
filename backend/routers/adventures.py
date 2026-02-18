@@ -19,7 +19,7 @@ import pytz
 from database import supabase
 from dependencies import get_current_user
 from services.adventure_service import AdventureService
-from utils.query_columns import ADVENTURE_WITH_MONSTER, MONSTER_FULL
+from utils.query_columns import ADVENTURE_WITH_MONSTER
 from utils.logging_config import get_logger
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])

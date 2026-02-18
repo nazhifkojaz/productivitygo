@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
+from typing import List
 from datetime import date, timedelta, datetime
 import pytz
 
@@ -7,7 +7,6 @@ from database import supabase
 from dependencies import get_current_user
 from services.battle_service import BattleService
 from utils.rank_calculations import calculate_rank
-from utils.quota import get_daily_quota
 from utils.stats import format_win_rate
 from utils.query_columns import BATTLE_RELOAD
 
@@ -353,6 +352,3 @@ async def get_battle_details(battle_id: str, user = Depends(get_current_user)):
 
     return battle
 
-@router.post("/{battle_id}/archive", operation_id="archive_battle")
-async def archive_battle(battle_id: str, user = Depends(get_current_user)):
-    return await BattleService.archive_battle(battle_id)

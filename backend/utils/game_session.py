@@ -5,7 +5,7 @@ REFACTOR-003: Abstract battle mode from task endpoints.
 This helper provides a unified interface for finding the user's active game session,
 whether it's a PVP battle or (in the future) an adventure mode session.
 """
-from typing import Tuple, Union, Optional
+from typing import Tuple, Optional
 
 from database import supabase
 from fastapi import HTTPException
