@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Swords, Trophy, Star, Target, Mail, Loader, Users, User, Compass } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,6 +7,8 @@ import UserCard from '../components/UserCard';
 import MonsterSelect from '../components/MonsterSelect';
 import StatCard from '../components/StatCard';
 import ActiveSessionBanner from '../components/ActiveSessionBanner';
+import MatchHistoryItem from '../components/MatchHistoryItem';
+import NeoModal from '../components/NeoModal';
 import { useProfile } from '../hooks/useProfile';
 import { useBattleInvites } from '../hooks/useBattleInvites';
 import { useFollowing } from '../hooks/useFollowing';
@@ -179,12 +181,12 @@ export default function Lobby() {
         }
     };
 
-    // Date Options (Next 7 days)
-    const dateOptions = Array.from({ length: 7 }, (_, i) => {
+    // Date Options (Next 7 days) - memoized for performance
+    const dateOptions = useMemo(() => Array.from({ length: 7 }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() + i + 1);
         return d;
-    });
+    }), []);
 
     return (
         <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8">
@@ -256,32 +258,15 @@ export default function Lobby() {
                             <h3 className="text-sm font-black uppercase font-mono">// RECENT BATTLES</h3>
                         </div>
                         <div className="p-4">
-                            {profile?.match_history && profile.match_history.length > 0 ? (
+                            {profile?.match_history?.length ? (
                                 <div className="space-y-2">
-                                    {profile.match_history.slice(0, 5).map((match: any) => (
-                                        <div key={match.id} className="bg-[#E8E4D9] border-3 border-black p-3 flex justify-between items-center shadow-[2px_2px_0_0_#000]">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xl">{match.emoji || '⚔️'}</span>
-                                                <div>
-                                                    <div className="font-black text-sm uppercase">
-                                                        {match.type === 'adventure' ? 'VS ' : ''}{match.rival}
-                                                    </div>
-                                                    <div className="text-xs text-gray-600 font-bold">
-                                                        {new Date(match.date).toLocaleDateString()}
-                                                        {match.xp_earned !== undefined && ` • +${match.xp_earned} XP`}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className={`font-black text-sm px-3 py-1 border-2 border-black shadow-[1px_1px_0_0_#000] ${
-                                                match.result === 'WIN' ? 'bg-[#2A9D8F] text-white' :
-                                                match.result === 'LOSS' ? 'bg-[#E63946] text-white' :
-                                                match.result === 'ESCAPED' ? 'bg-[#F4A261] text-white' :
-                                                match.result === 'COMPLETED' ? 'bg-[#457B9D] text-white' :
-                                                'bg-gray-300'
-                                            }`}>
-                                                {match.result}
-                                            </div>
-                                        </div>
+                                    {profile.match_history.slice(0, 5).map((match: any, i: number) => (
+                                        <MatchHistoryItem
+                                            key={match.id || `lobby-${i}`}
+                                            match={match}
+                                            compact
+                                            showDuration={false}
+                                        />
                                     ))}
                                 </div>
                             ) : (
@@ -299,8 +284,8 @@ export default function Lobby() {
                                 <Mail className="w-5 h-5" /> PENDING INVITES
                             </h3>
                             <div className="space-y-3">
-                                {invites.map((invite: any) => (
-                                    <div key={invite.id} className="bg-white border-3 border-black p-3">
+                                {invites.map((invite: any, i: number) => (
+                                    <div key={invite.id || `invite-${i}`} className="bg-white border-3 border-black p-3">
                                         <div className="font-bold mb-1">VS {invite.user1?.username || 'Unknown'}</div>
                                         <div className="text-xs font-bold text-gray-500 mb-2">
                                             {invite.duration} Days • Starts {new Date(invite.start_date).toLocaleDateString()}
@@ -458,9 +443,9 @@ export default function Lobby() {
                             {activeTab === 'following' && (
                                 <div className="space-y-2">
                                     {following.length > 0 ? (
-                                        following.map((f: any) => (
+                                        following.map((f: any, i: number) => (
                                             <UserCard
-                                                key={f.id}
+                                                key={f.id || `following-${i}`}
                                                 user={f}
                                                 onViewProfile={() => navigate(`/user/${f.username}`)}
                                                 isFollowing={true}
@@ -478,11 +463,11 @@ export default function Lobby() {
                             {activeTab === 'followers' && (
                                 <div className="space-y-2">
                                     {followers.length > 0 ? (
-                                        followers.map((f: any) => {
+                                        followers.map((f: any, i: number) => {
                                             const isFollowingBack = following.some((followed: any) => followed.id === f.id);
                                             return (
                                                 <UserCard
-                                                    key={f.id}
+                                                    key={f.id || `follower-${i}`}
                                                     user={f}
                                                     onViewProfile={() => navigate(`/user/${f.username}`)}
                                                     isFollowing={isFollowingBack}
@@ -511,11 +496,11 @@ export default function Lobby() {
                                         />
                                     </div>
                                     <div className="space-y-2 max-h-64 overflow-y-auto">
-                                        {searchResults.map((u: any) => {
+                                        {searchResults.map((u: any, i: number) => {
                                             const isFollowingUser = following.some((f: any) => f.id === u.id);
                                             return (
                                                 <UserCard
-                                                    key={u.id}
+                                                    key={u.id || `search-${i}`}
                                                     user={u}
                                                     onViewProfile={() => navigate(`/user/${u.username}`)}
                                                     isFollowing={isFollowingUser}
@@ -537,20 +522,26 @@ export default function Lobby() {
             </div>
 
             {/* Monster Select Modal */}
-            {showMonsterSelect && monsterPool && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="bg-[#9D4EDD] p-4 border-b-4 border-black flex justify-between items-center">
-                            <h2 className="text-xl font-black uppercase text-white">Choose Your Monster</h2>
-                            <button
-                                onClick={() => setShowMonsterSelect(false)}
-                                className="w-8 h-8 bg-white border-2 border-black font-black hover:bg-gray-100"
-                            >
-                                ✕
-                            </button>
-                        </div>
+            <NeoModal
+                isOpen={showMonsterSelect && !!monsterPool}
+                onClose={() => setShowMonsterSelect(false)}
+                maxWidth="max-w-2xl"
+                maxHeight="max-h-[90vh]"
+                showCloseButton={false}
+            >
+                <div className="bg-[#9D4EDD] p-4 -mx-6 -mt-6 border-b-4 border-black flex justify-between items-center">
+                    <h2 className="text-xl font-black uppercase text-white">Choose Your Monster</h2>
+                    <button
+                        onClick={() => setShowMonsterSelect(false)}
+                        className="w-8 h-8 bg-white border-2 border-black font-black hover:bg-gray-100"
+                    >
+                        ✕
+                    </button>
+                </div>
 
-                        <div className="p-6">
+                <div className="p-6">
+                    {monsterPool && (
+                        <>
                             <div className="flex justify-between items-center mb-4">
                                 <div className="text-sm font-bold text-gray-500">
                                     Rating: {monsterPool.current_rating} |
@@ -566,10 +557,10 @@ export default function Lobby() {
                                 isLoading={startAdventureMutation.isPending}
                                 isRefreshing={refreshMonstersMutation.isPending}
                             />
-                        </div>
-                    </div>
+                        </>
+                    )}
                 </div>
-            )}
+            </NeoModal>
         </div>
     );
 }

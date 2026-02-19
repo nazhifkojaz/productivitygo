@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Lock, Star, Save, Clock, Info, X } from 'lucide-react';
+import { ArrowLeft, Lock, Star, Save, Clock, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import NeoModal from '../components/NeoModal';
 import type { TaskCreate, TaskCategory } from '../types';
 import { useProfile } from '../hooks/useProfile';
 import { useTaskQuota } from '../hooks/useTaskQuota';
@@ -311,56 +312,45 @@ export default function PlanTasks() {
             </div>
 
             {/* Category Info Modal */}
-            {showCategoryInfo && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowCategoryInfo(false)}>
-                    <div
-                        className="bg-white border-4 border-black shadow-[8px_8px_0_0_#000] w-full max-w-lg max-h-[80vh] overflow-y-auto"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Modal Header */}
-                        <div className="bg-black text-white p-4 border-b-4 border-black flex items-center justify-between">
-                            <h2 className="text-lg font-black uppercase">Task Categories</h2>
-                            <button
-                                onClick={() => setShowCategoryInfo(false)}
-                                className="p-1 hover:bg-gray-800 transition-colors"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        {/* Categories List */}
-                        <div className="p-6 space-y-4">
-                            {TASK_CATEGORIES.map((cat) => (
-                                <div
-                                    key={cat.key}
-                                    className="flex items-start gap-4 p-4 border-2 border-black bg-gray-50"
-                                >
-                                    <span className="text-3xl">{cat.emoji}</span>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="font-black uppercase">{cat.label}</h3>
-                                            <span className="px-2 py-0.5 text-xs font-bold border border-black bg-white">
-                                                {cat.element}
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-600">{cat.description}</p>
-                                    </div>
+            <NeoModal
+                isOpen={showCategoryInfo}
+                onClose={() => setShowCategoryInfo(false)}
+                maxWidth="max-w-lg"
+                maxHeight="max-h-[80vh]"
+                padding="p-6"
+                title="Task Categories"
+            >
+                {/* Categories List */}
+                <div className="space-y-4">
+                    {TASK_CATEGORIES.map((cat) => (
+                        <div
+                            key={cat.key}
+                            className="flex items-start gap-4 p-4 border-2 border-black bg-gray-50"
+                        >
+                            <span className="text-3xl">{cat.emoji}</span>
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-black uppercase">{cat.label}</h3>
+                                    <span className="px-2 py-0.5 text-xs font-bold border border-black bg-white">
+                                        {cat.element}
+                                    </span>
                                 </div>
-                            ))}
-
-                            {/* Footer Info */}
-                            <div className="mt-6 p-4 bg-[#2A9D8F] border-2 border-black text-white text-center">
-                                <p className="font-bold text-sm">
-                                    Different elements are more or less effective against different monster types.
-                                </p>
-                                <p className="text-xs mt-1">
-                                    Discover weaknesses through combat!
-                                </p>
+                                <p className="text-sm text-gray-600">{cat.description}</p>
                             </div>
                         </div>
+                    ))}
+
+                    {/* Footer Info */}
+                    <div className="mt-6 p-4 bg-[#2A9D8F] border-2 border-black text-white text-center">
+                        <p className="font-bold text-sm">
+                            Different elements are more or less effective against different monster types.
+                        </p>
+                        <p className="text-xs mt-1">
+                            Discover weaknesses through combat!
+                        </p>
                     </div>
                 </div>
-            )}
+            </NeoModal>
         </div>
     );
 }

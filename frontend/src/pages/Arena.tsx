@@ -310,7 +310,7 @@ export default function Dashboard() {
                                 <AnimatePresence>
                                     {tasks.map((task, index) => (
                                         <motion.div
-                                            key={task.id}
+                                            key={task.id || `task-${index}`}
                                             layout
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}

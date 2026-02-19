@@ -1,5 +1,6 @@
-import { Skull, Clock, Zap, Coffee, Info, X } from 'lucide-react';
+import { Skull, Clock, Zap, Coffee, Info } from 'lucide-react';
 import { useState } from 'react';
+import NeoModal from './NeoModal';
 import type { Adventure } from '../hooks/useCurrentAdventure';
 import { getMonsterTypeMeta } from '../types/monster';
 import { TASK_CATEGORIES, getTaskCategoryMeta } from '../types/task';
@@ -161,114 +162,115 @@ export default function MonsterCard({ adventure }: MonsterCardProps) {
             </div>
 
             {/* Monster Intel Modal */}
-            {showIntelModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setShowIntelModal(false)}>
-                    <div
-                        className="bg-white border-4 border-black shadow-[8px_8px_0_0_#000] w-full max-w-md max-h-[80vh] overflow-y-auto"
-                        onClick={(e) => e.stopPropagation()}
+            <NeoModal
+                isOpen={showIntelModal}
+                onClose={() => setShowIntelModal(false)}
+                maxWidth="max-w-md"
+                maxHeight="max-h-[80vh]"
+                showCloseButton={false}
+                className="monster-intel-modal"
+            >
+                {/* Custom black header for Monster Intel */}
+                <div className="bg-black text-white p-4 border-b-4 border-black flex items-center justify-between -mt-6 -mx-6 mb-6 rounded-t-lg">
+                    <h2 className="text-lg font-black uppercase">Monster Intel</h2>
+                    <button
+                        onClick={() => setShowIntelModal(false)}
+                        className="p-1 hover:bg-gray-800 transition-colors text-white"
+                        aria-label="Close modal"
                     >
-                        {/* Modal Header */}
-                        <div className="bg-black text-white p-4 border-b-4 border-black flex items-center justify-between">
-                            <h2 className="text-lg font-black uppercase">Monster Intel</h2>
-                            <button
-                                onClick={() => setShowIntelModal(false)}
-                                className="p-1 hover:bg-gray-800 transition-colors"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
+                        <Info className="w-5 h-5" />
+                    </button>
+                </div>
 
-                        {/* Monster Info */}
-                        <div className="p-6">
-                            <div className="flex flex-col items-center mb-6">
-                                <div className="text-6xl mb-3">{adventure.monster?.emoji || '👹'}</div>
-                                <h3 className="text-xl font-black uppercase text-center mb-2">
-                                    {adventure.monster?.name || 'Unknown Monster'}
-                                </h3>
-                                <div className="flex items-center gap-2">
-                                    {adventure.monster?.monster_type && (
-                                        <span className="px-3 py-1 text-xs font-black border-2 border-black bg-white">
-                                            {getMonsterTypeMeta(adventure.monster.monster_type).emoji} {getMonsterTypeMeta(adventure.monster.monster_type).label}
-                                        </span>
-                                    )}
-                                    <span className={`px-3 py-1 text-xs font-black border-2 border-black text-white ${tierInfo.bgClass}`}>
-                                        {tier.toUpperCase()} TIER
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Type Matchups */}
-                            <div className="mb-4">
-                                <h4 className="text-sm font-black uppercase font-mono text-gray-500 mb-3">
-                                    Type Weaknesses (Discovered)
-                                </h4>
-                                {interestingMatchups.length === 0 ? (
-                                    <div className="bg-gray-100 border-2 border-black p-4 text-center">
-                                        <p className="text-sm font-mono text-gray-600">
-                                            No weaknesses discovered yet...
-                                        </p>
-                                        <p className="text-xs font-mono text-gray-500 mt-2">
-                                            Complete tasks to reveal this monster's strengths and weaknesses!
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        {interestingMatchups.map(({ category, effectiveness }) => {
-                                            const catMeta = getTaskCategoryMeta(category as TaskCategory);
-                                            return (
-                                                <div
-                                                    key={category}
-                                                    className={`flex items-center justify-between p-3 border-2 border-black ${
-                                                        effectiveness === 'super_effective'
-                                                            ? 'bg-green-100'
-                                                            : effectiveness === 'resisted'
-                                                                ? 'bg-red-100'
-                                                                : 'bg-gray-100'
-                                                    }`}
-                                                >
-                                                    <span className="font-bold flex items-center gap-2">
-                                                        <span className="text-xl">{catMeta.emoji}</span>
-                                                        <span>{catMeta.label}</span>
-                                                    </span>
-                                                    <span
-                                                        className={`px-3 py-1 text-xs font-black border-2 border-black ${
-                                                            effectiveness === 'super_effective'
-                                                                ? 'bg-green-500 text-white'
-                                                                : effectiveness === 'resisted'
-                                                                    ? 'bg-red-500 text-white'
-                                                                    : 'bg-gray-300 text-gray-700'
-                                                        }`}
-                                                    >
-                                                        {effectiveness === 'super_effective'
-                                                            ? 'SUPER EFFECTIVE!'
-                                                            : effectiveness === 'resisted'
-                                                                ? 'RESISTED...'
-                                                                : 'NORMAL'}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Hint about neutral damage */}
-                            {interestingMatchups.length > 0 && (
-                                <p className="text-xs font-mono text-gray-500 text-center mt-4">
-                                    (All other categories deal normal damage)
-                                </p>
+                {/* Monster Info */}
+                <div>
+                    <div className="flex flex-col items-center mb-6">
+                        <div className="text-6xl mb-3">{adventure.monster?.emoji || '👹'}</div>
+                        <h3 className="text-xl font-black uppercase text-center mb-2">
+                            {adventure.monster?.name || 'Unknown Monster'}
+                        </h3>
+                        <div className="flex items-center gap-2">
+                            {adventure.monster?.monster_type && (
+                                <span className="px-3 py-1 text-xs font-black border-2 border-black bg-white">
+                                    {getMonsterTypeMeta(adventure.monster.monster_type).emoji} {getMonsterTypeMeta(adventure.monster.monster_type).label}
+                                </span>
                             )}
-
-                            {/* Monster Description */}
-                            <div className="mt-6 p-4 bg-gray-100 border-2 border-black border-dashed">
-                                <p className="text-sm font-mono italic text-center text-gray-700">
-                                    "{adventure.monster?.description || 'A mysterious creature...'}"
-                                </p>
-                            </div>
+                            <span className={`px-3 py-1 text-xs font-black border-2 border-black text-white ${tierInfo.bgClass}`}>
+                                {tier.toUpperCase()} TIER
+                            </span>
                         </div>
                     </div>
+
+                    {/* Type Matchups */}
+                    <div className="mb-4">
+                        <h4 className="text-sm font-black uppercase font-mono text-gray-500 mb-3">
+                            Type Weaknesses (Discovered)
+                        </h4>
+                        {interestingMatchups.length === 0 ? (
+                            <div className="bg-gray-100 border-2 border-black p-4 text-center">
+                                <p className="text-sm font-mono text-gray-600">
+                                    No weaknesses discovered yet...
+                                </p>
+                                <p className="text-xs font-mono text-gray-500 mt-2">
+                                    Complete tasks to reveal this monster's strengths and weaknesses!
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {interestingMatchups.map(({ category, effectiveness }) => {
+                                    const catMeta = getTaskCategoryMeta(category as TaskCategory);
+                                    return (
+                                        <div
+                                            key={category}
+                                            className={`flex items-center justify-between p-3 border-2 border-black ${
+                                                effectiveness === 'super_effective'
+                                                    ? 'bg-green-100'
+                                                    : effectiveness === 'resisted'
+                                                        ? 'bg-red-100'
+                                                        : 'bg-gray-100'
+                                            }`}
+                                        >
+                                            <span className="font-bold flex items-center gap-2">
+                                                <span className="text-xl">{catMeta.emoji}</span>
+                                                <span>{catMeta.label}</span>
+                                            </span>
+                                            <span
+                                                className={`px-3 py-1 text-xs font-black border-2 border-black ${
+                                                    effectiveness === 'super_effective'
+                                                        ? 'bg-green-500 text-white'
+                                                        : effectiveness === 'resisted'
+                                                            ? 'bg-red-500 text-white'
+                                                            : 'bg-gray-300 text-gray-700'
+                                                }`}
+                                            >
+                                                {effectiveness === 'super_effective'
+                                                    ? 'SUPER EFFECTIVE!'
+                                                    : effectiveness === 'resisted'
+                                                        ? 'RESISTED...'
+                                                        : 'NORMAL'}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Hint about neutral damage */}
+                    {interestingMatchups.length > 0 && (
+                        <p className="text-xs font-mono text-gray-500 text-center mt-4">
+                            (All other categories deal normal damage)
+                        </p>
+                    )}
+
+                    {/* Monster Description */}
+                    <div className="mt-6 p-4 bg-gray-100 border-2 border-black border-dashed">
+                        <p className="text-sm font-mono italic text-center text-gray-700">
+                            "{adventure.monster?.description || 'A mysterious creature...'}"
+                        </p>
+                    </div>
                 </div>
-            )}
+            </NeoModal>
         </aside>
     );
 }

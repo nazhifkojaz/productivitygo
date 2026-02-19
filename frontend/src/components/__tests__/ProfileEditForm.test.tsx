@@ -65,7 +65,7 @@ describe('ProfileEditForm', () => {
             const user = userEvent.setup();
             render(<ProfileEditForm {...defaultProps} />);
 
-            const closeButton = screen.getByLabelText('Close');
+            const closeButton = screen.getByLabelText('Close modal');
             await user.click(closeButton);
 
             expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
@@ -107,7 +107,7 @@ describe('ProfileEditForm', () => {
         it('has proper aria-label on close button', () => {
             render(<ProfileEditForm {...defaultProps} />);
 
-            expect(screen.getByLabelText('Close')).toBeInTheDocument();
+            expect(screen.getByLabelText('Close modal')).toBeInTheDocument();
         });
 
         it('associates label with username input', () => {

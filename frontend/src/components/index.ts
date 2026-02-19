@@ -27,6 +27,8 @@ export { default as UserCard } from './UserCard';
 
 // Utility components
 export { default as TimezoneSync } from './TimezoneSync';
+export { default as MatchHistoryItem } from './MatchHistoryItem';
+export { default as NeoModal } from './NeoModal';
 
 // Skeleton components (named exports)
 export {
