@@ -29,12 +29,3 @@ export { default as UserCard } from './UserCard';
 export { default as TimezoneSync } from './TimezoneSync';
 export { default as MatchHistoryItem } from './MatchHistoryItem';
 export { default as NeoModal } from './NeoModal';
-
-// Skeleton components (named exports)
-export {
-    ProfileSkeleton,
-    UserListSkeleton,
-    BattleCardSkeleton,
-    DashboardSkeleton,
-    PublicProfileSkeleton,
-} from './Skeletons';
