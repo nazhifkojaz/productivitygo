@@ -6,8 +6,13 @@ import pytz
 from database import supabase
 from dependencies import get_current_user
 from services.battle_service import BattleService
+from services.battle_query_service import BattleQueryService
 from utils.rank_calculations import calculate_rank
-from utils.stats import format_win_rate
+from utils.battle_helpers import (
+    extract_user_profiles,
+    calculate_app_state,
+    build_rival_intelligence
+)
 from utils.query_columns import BATTLE_RELOAD
 from utils.timezone import get_local_date
 from utils.logging_config import get_logger
@@ -17,110 +22,63 @@ logger = get_logger(__name__)
 
 @router.get("/current", operation_id="get_current_battle")
 async def get_current_battle(user = Depends(get_current_user)):
-    # Find ONLY active battles (NOT pending or completed)
-    # Pending battles -> Handled in Lobby (UserDashboard)
-    # Completed battles -> Handled in Battle Result
+    """
+    Get the current active battle with full context.
 
-    # OPTIMIZATION: Fetch battle AND related profiles in ONE query
-    # We need timezone for logic, and stats for Rival Radar
-    res = await supabase.table("battles").select(
-        "*, user1:profiles!user1_id(username, level, timezone, battle_win_count, battle_count, total_xp_earned, completed_tasks), user2:profiles!user2_id(username, level, timezone, battle_win_count, battle_count, total_xp_earned, completed_tasks)"
-    ).or_(f"user1_id.eq.{user.id},user2_id.eq.{user.id}")\
-    .eq("status", "active")\
-    .execute()
+    This endpoint orchestrates multiple services to build a complete
+    battle response including:
+    - Battle data with embedded profiles
+    - Lazy round processing
+    - App state calculation
+    - Rival intelligence
+    - User progress tracking
 
-    if not res.data:
-        # Return 404 so frontend knows to show Lobby (IDLE state)
+    REFACTOR-005: Refactored to use extracted helper functions and services.
+    """
+    # Step 1: Fetch battle with embedded profiles
+    battle = await BattleQueryService.fetch_active_battle_with_profiles(user.id)
+
+    if not battle:
         raise HTTPException(status_code=404, detail="No active battle found")
-
-    # Get the most relevant active battle
-    # (Usually there's only one, but if multiple, take latest ending)
-    battle = max(res.data, key=lambda b: b['end_date'])
 
     start_date = date.fromisoformat(battle['start_date'])
     end_date = date.fromisoformat(battle['end_date'])
 
-    # --- LAZY EVALUATION TRIGGER (Backup) ---
+    # Step 2: Lazy evaluation trigger (backup)
     if battle['status'] == 'active':
         from utils.battle_processor import process_battle_rounds
         rounds_processed = await process_battle_rounds(battle)
         if rounds_processed > 0:
-            # Reload battle to get updated status/current_round
-            # We need to reload with the same join if we want to be consistent,
-            # but usually just reloading the battle row is enough for status check.
-            # However, to keep 'battle' object consistent with embedded data, let's just update the fields we know changed.
-            battle_reload = await supabase.table("battles").select(BATTLE_RELOAD).eq("id", battle['id']).single().execute()
-            if battle_reload.data:
-                # Update only battle fields, keep embedded profiles
-                battle.update(battle_reload.data)
+            updated_fields = await BattleQueryService.reload_battle_state(battle['id'])
+            if updated_fields:
+                battle.update(updated_fields)
 
-    # Determine App State based on USER LOCAL TIME
-    # We have the user's profile embedded in user1 or user2
-    if battle['user1_id'] == user.id:
-        user_profile = battle['user1']
-        rival_profile = battle['user2']
-        rival_id = battle['user2_id']
-    else:
-        user_profile = battle['user2']
-        rival_profile = battle['user1']
-        rival_id = battle['user1_id']
+    # Step 3: Extract profiles with null handling
+    user_profile, rival_profile, rival_id = extract_user_profiles(battle, user.id)
 
-    # Handle None profiles (deleted users, database inconsistencies)
-    if user_profile is None:
-        logger.warning(f"User profile missing for battle {battle['id']}, user {user.id}")
-        user_profile = {'timezone': 'UTC', 'username': 'Unknown', 'level': 1}
-
-    if rival_profile is None:
-        logger.warning(f"Rival profile missing for battle {battle['id']}, rival {rival_id}")
-        # Default rival profile with safe defaults
-        rival_profile = {
-            'timezone': 'UTC',
-            'username': 'Unknown Rival',
-            'level': 1,
-            'battle_win_count': 0,
-            'battle_count': 0,
-            'total_xp_earned': 0,
-            'completed_tasks': 0
-        }
-
+    # Step 4: Calculate app state
     user_tz = user_profile.get('timezone', 'UTC')
-
-    # REFACTOR-007: Use centralized get_local_date from utils.timezone
     user_today = get_local_date(user_tz)
 
-    if battle['status'] == 'pending':
-        app_state = 'PENDING_ACCEPTANCE'
-    elif battle['status'] == 'completed':
-        app_state = 'BATTLE_END'
-    elif user_today < start_date:
-        app_state = 'PRE_BATTLE'
-    elif user_today > end_date:
-        app_state = 'BATTLE_END'
-    else:
-        if user_today == end_date:
-             app_state = 'LAST_BATTLE_DAY'
-        else:
-            app_state = 'IN_BATTLE'
-
+    app_state = calculate_app_state(
+        battle['status'],
+        start_date,
+        end_date,
+        user_today
+    )
     battle['app_state'] = app_state
+
+    # Step 5: Lazy evaluation trigger (fair mode) - round processing
     duration = battle.get('duration', 5)
     current_round = battle.get('current_round', 0)
 
-    # --- LAZY EVALUATION TRIGGER (FAIR MODE) ---
-    # Only process rounds when the date has passed for BOTH players.
-
-    # 1. Get Timezones (Already fetched!)
-    # Use 'or' to provide default dict if profile is None
-    user1_data = battle['user1'] or {'timezone': 'UTC'}
-    user2_data = battle['user2'] or {'timezone': 'UTC'}
-    tz1 = user1_data.get('timezone', 'UTC')
-    tz2 = user2_data.get('timezone', 'UTC')
-
-    # 2. REFACTOR-007: Use centralized get_local_date from utils.timezone
-    date1 = get_local_date(tz1)
-    date2 = get_local_date(tz2)
-
     if battle['status'] == 'active':
+        # Get both players' local dates
+        user1_data = battle['user1'] or {'timezone': 'UTC'}
+        user2_data = battle['user2'] or {'timezone': 'UTC'}
+        date1 = get_local_date(user1_data.get('timezone', 'UTC'))
+        date2 = get_local_date(user2_data.get('timezone', 'UTC'))
+
         days_since_start = (user_today - start_date).days
         rounds_to_process = min(days_since_start, duration)
 
@@ -130,18 +88,15 @@ async def get_current_battle(user = Depends(get_current_user)):
                 if date1 > round_date and date2 > round_date:
                     logger.debug(f"Processing round {r} (Date {round_date}) - Passed for both")
                     try:
-                        # BUG-004 FIX: Validate RPC response before incrementing round counter
                         rpc_result = await supabase.rpc("calculate_daily_round", {
                             "battle_uuid": battle['id'],
                             "round_date": round_date.isoformat()
                         }).execute()
 
-                        # Validate RPC succeeded before proceeding
                         if rpc_result.data is None:
                             logger.warning(f"Lazy Eval: RPC returned None for round {r}, stopping processing")
                             break
 
-                        # Update round count only after validation
                         current_round += 1
                         await supabase.table("battles").update({"current_round": current_round}).eq("id", battle['id']).execute()
 
@@ -159,82 +114,30 @@ async def get_current_battle(user = Depends(get_current_user)):
                 result = await BattleService.complete_battle(battle['id'])
                 if result:
                     battle['status'] = 'completed'
-                    # Log if this was an idempotent call (already completed by another process)
                     if result.get('already_completed'):
                         logger.debug(f"Battle {battle['id']} was already completed by another process (safe idempotent call)")
             except Exception as e:
-                 logger.error(f"Error auto-completing battle {battle['id']}: {e}")
+                logger.error(f"Error auto-completing battle {battle['id']}: {e}")
 
-
-    # Fetch Rival's Tasks for Today (Only if IN_BATTLE or LAST_BATTLE_DAY)
-    # This still requires a separate fetch as it's a different table (daily_entries -> tasks)
-    # We could optimize this too, but let's stick to the main profile optimization first.
+    # Step 6: Build rival intelligence
     if app_state in ['IN_BATTLE', 'LAST_BATTLE_DAY']:
         today_str = date.today().isoformat()
-
-        # 1. Get Daily Entry
-        rival_entry_res = await supabase.table("daily_entries").select("id")\
-            .eq("user_id", rival_id)\
-            .eq("date", today_str)\
-            .execute()
-
-        if rival_entry_res.data:
-            entry_id = rival_entry_res.data[0]['id']
-            # 2. Get Tasks
-            rival_tasks_res = await supabase.table("tasks").select("is_completed")\
-                .eq("daily_entry_id", entry_id)\
-                .execute()
-            rival_tasks = rival_tasks_res.data
-        else:
-            rival_tasks = []
-
-        total_tasks = len(rival_tasks)
-        completed_tasks = sum(1 for t in rival_tasks if t['is_completed'])
-
-        # REFACTOR-002: Use shared win rate calculation
-        battle_win_count = rival_profile.get('battle_win_count', 0)
-        battle_count = rival_profile.get('battle_count', 0)
-
-        battle['rival'] = {
-            'username': rival_profile.get('username', 'Unknown Rival'),
-            'level': rival_profile.get('level', 1),
-            'tasks_total': total_tasks,
-            'tasks_completed': completed_tasks,
-            'stats': {
-                'battle_wins': battle_win_count,
-                'battle_fought': battle_count,
-                'level': rival_profile.get('level', 1),
-                'total_xp': rival_profile.get('total_xp_earned', 0),
-                'win_rate': format_win_rate(battle_win_count, battle_count),
-                'tasks_completed': rival_profile.get('completed_tasks', 0)
-            }
-        }
+        total_tasks, completed_tasks = await BattleQueryService.fetch_rival_tasks_for_today(
+            rival_id, today_str
+        )
     else:
-        # REFACTOR-002: Use shared win rate calculation
-        battle_win_count = rival_profile.get('battle_win_count', 0)
-        battle_count = rival_profile.get('battle_count', 0)
+        total_tasks, completed_tasks = 0, 0
 
-        battle['rival'] = {
-            'username': rival_profile.get('username', 'Unknown Rival'),
-            'level': rival_profile.get('level', 1),
-            'tasks_total': 0,
-            'tasks_completed': 0,
-            'stats': {
-                'battle_wins': battle_win_count,
-                'battle_fought': battle_count,
-                'level': rival_profile.get('level', 1),
-                'total_xp': rival_profile.get('total_xp_earned', 0),
-                'win_rate': format_win_rate(battle_win_count, battle_count),
-                'tasks_completed': rival_profile.get('completed_tasks', 0)
-            }
-        }
+    battle['rival'] = build_rival_intelligence(
+        rival_profile,
+        total_tasks,
+        completed_tasks
+    )
 
-    # Calculate Rounds Played
-    rounds_res = await supabase.table("daily_entries").select("id")\
-        .eq("battle_id", battle['id'])\
-        .eq("user_id", user.id)\
-        .execute()
-    battle['rounds_played'] = len(rounds_res.data)
+    # Step 7: Calculate rounds played
+    battle['rounds_played'] = await BattleQueryService.calculate_rounds_played(
+        battle['id'], user.id
+    )
 
     return battle
 
