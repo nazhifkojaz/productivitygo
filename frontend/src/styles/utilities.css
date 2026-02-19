@@ -1,0 +1,47 @@
+@layer utilities {
+  /* Border utilities using design tokens */
+  .border-neo-2 {
+    border-width: var(--border-width-2);
+    border-style: solid;
+    border-color: var(--color-neo-black);
+  }
+
+  .border-neo-3 {
+    border-width: var(--border-width-3);
+    border-style: solid;
+    border-color: var(--color-neo-black);
+  }
+
+  .border-neo-4 {
+    border-width: var(--border-width-4);
+    border-style: solid;
+    border-color: var(--color-neo-black);
+  }
+
+  .border-neo-5 {
+    border-width: var(--border-width-5);
+    border-style: solid;
+    border-color: var(--color-neo-black);
+  }
+
+  /* Shadow utilities */
+  .shadow-neo-xs {
+    box-shadow: var(--shadow-neo-xs);
+  }
+
+  .shadow-neo-sm {
+    box-shadow: var(--shadow-neo-sm);
+  }
+
+  .shadow-neo {
+    box-shadow: var(--shadow-neo);
+  }
+
+  .shadow-neo-lg {
+    box-shadow: var(--shadow-neo-lg);
+  }
+
+  .shadow-neo-xl {
+    box-shadow: var(--shadow-neo-xl);
+  }
+}
