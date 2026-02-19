@@ -144,8 +144,7 @@ def enrich_battle_history(
         rivals_map: Dict mapping rival_id -> username
                    (from batch_fetch_rival_usernames)
         include_type: If True, adds 'type' field for battle/adventure distinction.
-                     Private profile uses True (combines battles + adventures).
-                     Public profile uses False (battles only).
+                     Both profiles now use True (combine battles + adventures).
 
     Returns:
         List of enriched match history entries with keys:
@@ -182,10 +181,11 @@ def enrich_battle_history(
         - Missing winner_id results in 'DRAW'
         - Missing rival in rivals_map results in 'Unknown' username
         - Missing duration defaults to 5
+        - Missing or empty ID falls back to battle-fallback-{index}
     """
     enriched = []
 
-    for battle in match_history:
+    for idx, battle in enumerate(match_history):
         rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
         rival_name = rivals_map.get(rival_id, "Unknown")
 
@@ -195,8 +195,13 @@ def enrich_battle_history(
         elif battle.get('winner_id') == rival_id:
             result = "LOSS"
 
+        # Ensure we always have a valid ID (fallback to index if missing/empty)
+        battle_id = battle.get('id')
+        if not battle_id or not str(battle_id).strip():
+            battle_id = f"battle-fallback-{idx}"
+
         entry = {
-            "id": battle['id'],
+            "id": battle_id,
             "date": battle['end_date'],
             "rival": rival_name,
             "result": result,

@@ -141,7 +141,7 @@ async def get_profile(user = Depends(get_current_user)):
 
         # Enrich adventure history
         enriched_adventures = []
-        for adventure in adventure_history:
+        for idx, adventure in enumerate(adventure_history):
             monster = monsters_map.get(adventure.get('monster_id'), {})
 
             # Determine result based on status and damage
@@ -152,8 +152,13 @@ async def get_profile(user = Depends(get_current_user)):
             else:
                 result = "COMPLETED"
 
+            # Ensure we always have a valid ID (fallback to index if missing/empty)
+            adventure_id = adventure.get('id')
+            if not adventure_id or not str(adventure_id).strip():
+                adventure_id = f"adventure-fallback-{idx}"
+
             enriched_adventures.append({
-                "id": adventure['id'],
+                "id": adventure_id,
                 "date": adventure.get('completed_at'),
                 "rival": monster.get('name', 'Unknown Monster'),
                 "emoji": monster.get('emoji', '👾'),
@@ -293,9 +298,59 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
         match_history = battles_res.data
 
         # REFACTOR-007: Use centralized rival batch-fetch and enrichment
-        # Note: include_type=False because public profile only shows battles
         rivals_map = await batch_fetch_rival_usernames(match_history, user_id)
-        enriched_history = enrich_battle_history(match_history, user_id, rivals_map, include_type=False)
+        enriched_history = enrich_battle_history(match_history, user_id, rivals_map, include_type=True)
+
+        # Fetch Adventure History (Last 5 completed/escaped adventures)
+        adventures_res = await supabase.table("adventures").select(ADVENTURE_MATCH_HISTORY)\
+            .eq("user_id", user_id)\
+            .in_("status", ["completed", "escaped"])\
+            .order("completed_at", desc=True)\
+            .limit(5)\
+            .execute()
+
+        adventure_history = adventures_res.data
+
+        # Batch fetch monsters for adventure history
+        monster_ids = [adv.get('monster_id') for adv in adventure_history if adv.get('monster_id')]
+        monsters_map = {}
+        if monster_ids:
+            monsters_res = await supabase.table("monsters").select("id, name, emoji, tier").in_("id", list(set(monster_ids))).execute()
+            monsters_map = {m['id']: m for m in monsters_res.data}
+
+        # Enrich adventure history
+        enriched_adventures = []
+        for idx, adventure in enumerate(adventure_history):
+            monster = monsters_map.get(adventure.get('monster_id'), {})
+
+            # Determine result based on status
+            if adventure.get('status') == 'escaped':
+                result = "ESCAPED"
+            elif adventure.get('status') == 'completed':
+                result = "COMPLETED"
+            else:
+                result = "WIN"
+
+            # Ensure we always have a valid ID (fallback to index if missing/empty)
+            adventure_id = adventure.get('id')
+            if not adventure_id or not str(adventure_id).strip():
+                adventure_id = f"adventure-fallback-{idx}"
+
+            enriched_adventures.append({
+                "id": adventure_id,
+                "date": adventure.get('completed_at'),
+                "rival": monster.get('name', 'Unknown Monster'),
+                "emoji": monster.get('emoji', '👾'),
+                "result": result,
+                "duration": adventure.get('duration', 5),
+                "xp_earned": adventure.get('xp_earned', 0),
+                "type": "adventure"
+            })
+
+        # Combine battle and adventure history, sorted by date
+        combined_history = enriched_history + enriched_adventures
+        combined_history.sort(key=lambda x: x.get('date', ''), reverse=True)
+        combined_history = combined_history[:10]  # Limit to 10 total entries
 
         return {
             "id": profile['id'],
@@ -327,7 +382,7 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
                 ) if adventure_count > 0 else 0,
             },
             "created_at": profile.get("created_at"),
-            "match_history": enriched_history
+            "match_history": combined_history
         }
 
     except HTTPException:
