@@ -1,6 +1,24 @@
 /* NeoBrutalist Design System - Minimal Used Classes Only */
 /* Color tokens and shadows are defined in tokens.css */
 
+/* Grid Background Pattern */
+/* 20x20px grid lines for technical notebook aesthetic */
+/* Used on: Arena, Lobby, PlanTasks, BattleResult, AdventureResult, Login, Profile, PublicProfile */
+.neo-grid-bg {
+  background-image:
+    linear-gradient(var(--color-neo-black) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-neo-black) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: -1px -1px;
+}
+
+/* Hide grid pattern when printing to save ink */
+@media print {
+  .neo-grid-bg {
+    background-image: none !important;
+  }
+}
+
 /* Marquee animation */
 @keyframes marquee {
   0% { transform: translateX(0); }

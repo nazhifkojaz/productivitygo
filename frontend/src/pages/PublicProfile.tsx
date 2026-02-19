@@ -64,12 +64,12 @@ export default function PublicProfile() {
         return d;
     }), []);
 
-    if (loading) return <div className="min-h-screen bg-[#E8E4D9] flex items-center justify-center font-black">LOADING PROFILE...</div>;
+    if (loading) return <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg flex items-center justify-center font-black">LOADING PROFILE...</div>;
 
-    if (!profile) return <div className="min-h-screen bg-[#E8E4D9] flex items-center justify-center font-black">USER NOT FOUND</div>;
+    if (!profile) return <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg flex items-center justify-center font-black">USER NOT FOUND</div>;
 
     return (
-        <div className="min-h-screen bg-[#E8E4D9] text-black font-sans p-4 md:p-8 pb-24">
+        <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg text-black font-sans p-4 md:p-8 pb-24">
             <div className="max-w-4xl mx-auto">
                 {/* Header - Matching Profile.tsx style */}
                 <header className="flex gap-4 mb-8 w-full">

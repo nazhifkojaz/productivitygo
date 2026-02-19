@@ -59,7 +59,7 @@ export default function Profile() {
     };
 
     return (
-        <div className="min-h-screen bg-[#E8E4D9] p-4 md:p-8 pb-24 flex flex-col items-center">
+        <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8 pb-24 flex flex-col items-center">
 
             {/* Header */}
             <header className="w-full max-w-3xl flex items-stretch gap-4 mb-8">
