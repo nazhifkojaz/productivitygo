@@ -1,27 +1,38 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Swords, Trophy, Star, Target, Mail, Loader, Users, User, Compass } from 'lucide-react';
 import { toast } from 'sonner';
-import TabButton from '../components/TabButton';
-import UserCard from '../components/UserCard';
 import MonsterSelect from '../components/MonsterSelect';
-import StatCard from '../components/StatCard';
 import ActiveSessionBanner from '../components/ActiveSessionBanner';
-import MatchHistoryItem from '../components/MatchHistoryItem';
 import NeoModal from '../components/NeoModal';
 import { useProfile } from '../hooks/useProfile';
 import { useBattleInvites } from '../hooks/useBattleInvites';
 import { useFollowing } from '../hooks/useFollowing';
 import { useFollowers } from '../hooks/useFollowers';
-import { useUserSearch } from '../hooks/useUserSearch';
 import { useSocialMutations } from '../hooks/useSocialMutations';
 import { useBattleMutations } from '../hooks/useBattleMutations';
-import { useChallengeMutations } from '../hooks/useChallengeMutations';
 import { useMonsters } from '../hooks/useMonsters';
 import { useAdventureMutations } from '../hooks/useAdventureMutations';
-import { useCurrentBattle } from '../hooks/useCurrentBattle';
-import { useCurrentAdventure } from '../hooks/useCurrentAdventure';
+import { useUserSearch } from '../hooks/useUserSearch';
+import { useActiveSession } from '../hooks/lobby/useActiveSession';
+import { useInviteForm } from '../hooks/lobby/useInviteForm';
+import { LobbyHeader } from '../components/lobby/LobbyHeader';
+import { LobbyStatsPanel } from '../components/lobby/LobbyStatsPanel';
+import { BattleStation } from '../components/lobby/BattleStation';
+import { AdventureStation } from '../components/lobby/AdventureStation';
+import { SocialHub } from '../components/lobby/SocialHub';
+import type { SocialTab } from '../types/lobby';
 
+/**
+ * Lobby page - Main dashboard for the app.
+ *
+ * Displays user profile, stats, battle station, adventure station,
+ * and social hub for following/following users.
+ *
+ * REFACTOR-005: Phase 5 - Item 6.2
+ * - Extracted components for better maintainability
+ * - Extracted hooks for session detection and form state
+ * - Reduced from 567 lines to ~150 lines
+ */
 export default function Lobby() {
     const navigate = useNavigate();
 
@@ -32,7 +43,6 @@ export default function Lobby() {
     const { data: followers = [] } = useFollowers();
     const { followMutation, unfollowMutation } = useSocialMutations();
     const { acceptInviteMutation, rejectInviteMutation } = useBattleMutations();
-    const { sendChallengeByEmailMutation, isSending: isInviteSending } = useChallengeMutations();
 
     // Adventure hooks
     const [showMonsterSelect, setShowMonsterSelect] = useState(false);
@@ -40,57 +50,17 @@ export default function Lobby() {
     const { startAdventureMutation, refreshMonstersMutation } = useAdventureMutations();
     const { refetch: refetchProfile } = useProfile();
 
-    // Active session detection (Feature 2: Lobby Navigation Fix)
-    const hasActiveBattle = !!profile?.current_battle;
-    const hasActiveAdventure = !!profile?.current_adventure;
-    const { data: activeBattle } = useCurrentBattle();
-    const { data: activeAdventure } = useCurrentAdventure();
+    // Active session detection
+    const { showBanner, bannerProps } = useActiveSession(profile);
 
-    // Redirect to result page if session is completed
-    useEffect(() => {
-        if (activeBattle?.status === 'completed') {
-            navigate(`/battle-result/${activeBattle.id}`, { replace: true });
-        }
-        if (activeAdventure?.status === 'completed' || activeAdventure?.status === 'escaped') {
-            navigate(`/adventure-result/${activeAdventure.id}`, { replace: true });
-        }
-    }, [activeBattle, activeAdventure, navigate]);
+    // Invite form hook
+    const inviteForm = useInviteForm();
 
-    // Determine if we should show the active session banner
-    const showActiveSessionBanner = hasActiveBattle || hasActiveAdventure;
-
-    // Prepare banner props
-    const getBannerProps = () => {
-        if (hasActiveAdventure && activeAdventure) {
-            const monster = activeAdventure.monster;
-            return {
-                sessionType: 'adventure' as const,
-                opponentName: monster?.name || 'Unknown Monster',
-                opponentEmoji: monster?.emoji,
-                currentDay: activeAdventure.current_round || 1,
-                totalDays: activeAdventure.duration || 5,
-            };
-        }
-        if (hasActiveBattle && activeBattle) {
-            const rival = activeBattle.user1?.id === profile?.id ? activeBattle.user2 : activeBattle.user1;
-            return {
-                sessionType: 'battle' as const,
-                opponentName: rival?.username || 'Rival',
-                opponentEmoji: rival?.avatar_emoji,
-                currentDay: activeBattle.current_round || 1,
-                totalDays: activeBattle.duration || 5,
-            };
-        }
-        return null;
-    };
-
-    const bannerProps = getBannerProps();
-
-    // Social State
+    // Social state
+    const [activeTab, setActiveTab] = useState<SocialTab['following']>('following');
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'following' | 'followers' | 'search'>('following');
 
-    // Debounce search query
+    // Debounced search for SocialHub
     const [debouncedQuery, setDebouncedQuery] = useState('');
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -99,11 +69,7 @@ export default function Lobby() {
 
     const { data: searchResults = [] } = useUserSearch(debouncedQuery);
 
-    // Invite State
-    const [searchEmail, setSearchEmail] = useState('');
-    const [startDate, setStartDate] = useState<string | null>(null);
-    const [duration, setDuration] = useState(5);
-
+    // Event handlers
     const handleFollowToggle = async (userId: string, isCurrentlyFollowing: boolean) => {
         try {
             if (isCurrentlyFollowing) {
@@ -115,29 +81,6 @@ export default function Lobby() {
             console.error("Follow toggle failed", error);
             toast.error("Failed to update follow status");
         }
-    };
-
-    const handleSearch = (query: string) => {
-        setSearchQuery(query);
-    };
-
-    const handleInvite = async () => {
-        if (!startDate) {
-            toast.error("Please select a start date first!");
-            return;
-        }
-        if (!searchEmail) {
-            toast.error("Please enter an email address!");
-            return;
-        }
-
-        await sendChallengeByEmailMutation.mutateAsync({
-            emailOrUsername: searchEmail,
-            startDate: startDate,
-            duration: duration
-        });
-
-        setSearchEmail('');
     };
 
     const handleAccept = async (battleId: string) => {
@@ -181,53 +124,13 @@ export default function Lobby() {
         }
     };
 
-    // Date Options (Next 7 days) - memoized for performance
-    const dateOptions = useMemo(() => Array.from({ length: 7 }, (_, i) => {
-        const d = new Date();
-        d.setDate(d.getDate() + i + 1);
-        return d;
-    }), []);
-
     return (
         <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8">
             {/* Header */}
-            <div className="max-w-6xl mx-auto mb-8">
-                <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000] p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 bg-[#F4A261] border-3 border-black flex items-center justify-center">
-                            <span className="text-3xl">{profile?.avatar_emoji || '😀'}</span>
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-black uppercase">{profile?.username || 'User'}</h1>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className="bg-[#F4A261] border-2 border-black px-2 py-0.5 text-xs font-black">
-                                    LEVEL {profile?.level || 1}
-                                </span>
-                                {profile?.rank && (
-                                    <span className="bg-[#E63946] border-2 border-black px-2 py-0.5 text-xs font-black text-white">
-                                        {profile.rank.toUpperCase()}
-                                    </span>
-                                )}
-                                <span className="text-xs font-mono font-bold text-gray-500">
-                                    STREAK: {profile?.stats?.current_streak || 0}🔥
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+            <LobbyHeader profile={profile} />
 
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => navigate('/profile')}
-                            className="p-3 bg-white border-3 border-black shadow-[3px_3px_0_0_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[2px_2px_0_0_#000] transition-all"
-                        >
-                            <User className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Active Session Banner - shown when user has an active battle or adventure */}
-            {showActiveSessionBanner && bannerProps && (
+            {/* Active Session Banner */}
+            {showBanner && bannerProps && (
                 <div className="max-w-6xl mx-auto mb-8">
                     <ActiveSessionBanner
                         {...bannerProps}
@@ -238,286 +141,35 @@ export default function Lobby() {
 
             <div className="max-w-6xl mx-auto grid md:grid-cols-12 gap-6">
                 {/* Left Column - Stats */}
-                <div className="md:col-span-4 space-y-6">
-                    {/* Stats Card */}
-                    <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
-                        <div className="bg-black text-white p-3 border-b-4 border-black">
-                            <h3 className="text-sm font-black uppercase font-mono">// STATISTICS</h3>
-                        </div>
-                        <div className="p-4 grid grid-cols-2 gap-3">
-                            <StatCard label="WINS" value={profile?.stats?.battle_wins || 0} icon={<Trophy className="w-4 h-4" />} color="bg-[#2A9D8F]" />
-                            <StatCard label="BATTLES" value={profile?.stats?.battle_fought || 0} icon={<Swords className="w-4 h-4" />} color="bg-[#457B9D]" />
-                            <StatCard label="TASKS" value={profile?.stats?.tasks_completed || 0} icon={<Target className="w-4 h-4" />} color="bg-[#F4A261]" />
-                            <StatCard label="XP" value={profile?.stats?.total_xp || 0} icon={<Star className="w-4 h-4" />} color="bg-[#9D4EDD]" />
-                        </div>
-                    </div>
-
-                    {/* Match History */}
-                    <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
-                        <div className="bg-black text-white p-3 border-b-4 border-black">
-                            <h3 className="text-sm font-black uppercase font-mono">// RECENT BATTLES</h3>
-                        </div>
-                        <div className="p-4">
-                            {profile?.match_history?.length ? (
-                                <div className="space-y-2">
-                                    {profile.match_history.slice(0, 5).map((match: any, i: number) => (
-                                        <MatchHistoryItem
-                                            key={match.id || `lobby-${i}`}
-                                            match={match}
-                                            compact
-                                            showDuration={false}
-                                        />
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center text-gray-400 font-bold text-sm py-4">
-                                    No recent battles
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Pending Invites */}
-                    {invites.length > 0 && (
-                        <div className="bg-[#F4A261] border-4 border-black shadow-[6px_6px_0_0_#000] p-6">
-                            <h3 className="text-xl font-black uppercase mb-4 flex items-center gap-2">
-                                <Mail className="w-5 h-5" /> PENDING INVITES
-                            </h3>
-                            <div className="space-y-3">
-                                {invites.map((invite: any, i: number) => (
-                                    <div key={invite.id || `invite-${i}`} className="bg-white border-3 border-black p-3">
-                                        <div className="font-bold mb-1">VS {invite.user1?.username || 'Unknown'}</div>
-                                        <div className="text-xs font-bold text-gray-500 mb-2">
-                                            {invite.duration} Days • Starts {new Date(invite.start_date).toLocaleDateString()}
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => handleAccept(invite.id)}
-                                                className="flex-1 bg-[#2A9D8F] border-2 border-black font-bold py-1 text-white hover:bg-[#238B80]"
-                                            >
-                                                ACCEPT
-                                            </button>
-                                            <button
-                                                onClick={() => handleReject(invite.id)}
-                                                className="flex-1 bg-[#E63946] border-2 border-black font-bold py-1 text-white hover:bg-[#c42d37]"
-                                            >
-                                                DECLINE
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                <LobbyStatsPanel
+                    profile={profile}
+                    invites={invites}
+                    onAcceptInvite={handleAccept}
+                    onRejectInvite={handleReject}
+                />
 
                 {/* Right Column - Battle Station & Social Hub */}
                 <div className="md:col-span-8 space-y-6">
-                    {/* Battle Station - only shown when no active session */}
-                    {!showActiveSessionBanner && (
-                    <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
-                        <div className="bg-[#E63946] text-white p-4 border-b-4 border-black">
-                            <h2 className="text-xl font-black uppercase flex items-center gap-2">
-                                <Swords className="w-6 h-6" /> Battle Station
-                            </h2>
-                            <p className="text-sm font-mono opacity-80">[ INITIATE PVP COMBAT ]</p>
-                        </div>
-
-                        <div className="p-6 grid md:grid-cols-2 gap-6">
-                            {/* Settings */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-black uppercase font-mono mb-2">
-                                        [ START DATE ]
-                                    </label>
-                                    <select
-                                        className="w-full border-3 border-black p-3 font-bold bg-white focus:outline-none focus:shadow-[4px_4px_0_0_#E63946]"
-                                        value={startDate || ''}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                    >
-                                        <option value="">Select Date</option>
-                                        {dateOptions.map(date => (
-                                            <option key={date.toISOString()} value={date.toISOString().split('T')[0]}>
-                                                {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="pt-3">
-                                    <label className="block text-xs font-black uppercase font-mono mb-2">
-                                        [ DURATION ]
-                                    </label>
-                                    <div className="flex gap-2">
-                                        {[3, 4, 5].map(d => (
-                                            <button
-                                                key={d}
-                                                onClick={() => setDuration(d)}
-                                                className={`flex-1 border-3 border-black p-3 font-black transition-all ${
-                                                    duration === d
-                                                        ? 'bg-[#E63946] text-white shadow-[3px_3px_0_0_#000]'
-                                                        : 'bg-white hover:bg-gray-100'
-                                                }`}
-                                            >
-                                                {d}D
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Challenge Form */}
-                            <div className="space-y-11">
-                                <div>
-                                    <label className="block text-xs font-black uppercase font-mono mb-2">
-                                        [ CHALLENGE EMAIL ]
-                                    </label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                        <input
-                                            type="email"
-                                            placeholder="rival@productivity.go"
-                                            className="w-full border-3 border-black p-3 pl-10 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#E63946]"
-                                            value={searchEmail}
-                                            onChange={(e) => setSearchEmail(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={handleInvite}
-                                    disabled={isInviteSending || !searchEmail || !startDate}
-                                    className={`w-full border-3 border-black p-3 font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2 ${
-                                        isInviteSending || !searchEmail || !startDate
-                                            ? 'bg-gray-300 cursor-not-allowed'
-                                            : 'bg-[#E63946]'
-                                    }`}
-                                >
-                                    {isInviteSending ? <Loader className="w-4 h-4 animate-spin" /> : <Swords className="w-5 h-5" />}
-                                    {isInviteSending ? 'SENDING...' : 'SEND CHALLENGE'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    {!showBanner && (
+                        <>
+                            <BattleStation {...inviteForm} />
+                            <AdventureStation
+                                onStartAdventure={() => setShowMonsterSelect(true)}
+                            />
+                        </>
                     )}
 
-                    {/* Adventure Station - only shown when no active session */}
-                    {!showActiveSessionBanner && (
-                    <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
-                        <div className="bg-[#9D4EDD] text-white p-4 border-b-4 border-black">
-                            <h2 className="text-xl font-black uppercase flex items-center gap-2">
-                                <Compass className="w-6 h-6" /> Adventure Station
-                            </h2>
-                            <p className="text-sm font-mono opacity-80">[ SOLO PVE COMBAT ]</p>
-                        </div>
-
-                        <div className="p-6">
-                            <p className="font-bold text-gray-600 mb-4 font-mono text-sm">
-                                &gt; Battle AI monsters solo. Complete tasks to deal damage!
-                            </p>
-
-                            <button
-                                onClick={() => setShowMonsterSelect(true)}
-                                className="w-full bg-[#9D4EDD] border-3 border-black p-4 font-black uppercase text-white shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all flex items-center justify-center gap-2"
-                            >
-                                <Compass className="w-5 h-5" /> START ADVENTURE
-                            </button>
-                        </div>
-                    </div>
-                    )}
-
-                    {/* Social Hub */}
-                    <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
-                        <div className="bg-black text-white p-4 border-b-4 border-black flex items-center justify-between">
-                            <h2 className="text-xl font-black uppercase flex items-center gap-2">
-                                <Users className="w-6 h-6" /> Social Hub
-                            </h2>
-                            <div className="flex gap-1">
-                                <TabButton active={activeTab === 'following'} onClick={() => setActiveTab('following')}>FOLLOWING</TabButton>
-                                <TabButton active={activeTab === 'followers'} onClick={() => setActiveTab('followers')}>FOLLOWERS</TabButton>
-                                <TabButton active={activeTab === 'search'} onClick={() => setActiveTab('search')}>SEARCH</TabButton>
-                            </div>
-                        </div>
-
-                        <div className="p-4">
-                            {activeTab === 'following' && (
-                                <div className="space-y-2">
-                                    {following.length > 0 ? (
-                                        following.map((f: any, i: number) => (
-                                            <UserCard
-                                                key={f.id || `following-${i}`}
-                                                user={f}
-                                                onViewProfile={() => navigate(`/user/${f.username}`)}
-                                                isFollowing={true}
-                                                onFollowToggle={() => handleFollowToggle(f.id, true)}
-                                            />
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-12 text-gray-400 font-bold italic border-2 border-dashed border-gray-300">
-                                            You are not following anyone yet.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {activeTab === 'followers' && (
-                                <div className="space-y-2">
-                                    {followers.length > 0 ? (
-                                        followers.map((f: any, i: number) => {
-                                            const isFollowingBack = following.some((followed: any) => followed.id === f.id);
-                                            return (
-                                                <UserCard
-                                                    key={f.id || `follower-${i}`}
-                                                    user={f}
-                                                    onViewProfile={() => navigate(`/user/${f.username}`)}
-                                                    isFollowing={isFollowingBack}
-                                                    onFollowToggle={() => handleFollowToggle(f.id, isFollowingBack)}
-                                                />
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="text-center py-12 text-gray-400 font-bold italic border-2 border-dashed border-gray-300">
-                                            No followers yet.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {activeTab === 'search' && (
-                                <div className="space-y-4">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                        <input
-                                            type="text"
-                                            value={searchQuery}
-                                            onChange={(e) => handleSearch(e.target.value)}
-                                            placeholder="Search warriors..."
-                                            className="w-full border-3 border-black p-3 pl-10 font-bold focus:outline-none focus:shadow-[4px_4px_0_0_#9D4EDD]"
-                                        />
-                                    </div>
-                                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                                        {searchResults.map((u: any, i: number) => {
-                                            const isFollowingUser = following.some((f: any) => f.id === u.id);
-                                            return (
-                                                <UserCard
-                                                    key={u.id || `search-${i}`}
-                                                    user={u}
-                                                    onViewProfile={() => navigate(`/user/${u.username}`)}
-                                                    isFollowing={isFollowingUser}
-                                                    onFollowToggle={() => handleFollowToggle(u.id, isFollowingUser)}
-                                                />
-                                            );
-                                        })}
-                                        {searchQuery.length > 1 && searchResults.length === 0 && (
-                                            <div className="text-center py-8 text-gray-400 font-bold">
-                                                No users found.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <SocialHub
+                        activeTab={activeTab}
+                        onTabChange={setActiveTab}
+                        searchQuery={searchQuery}
+                        onSearchChange={setSearchQuery}
+                        following={following}
+                        followers={followers}
+                        searchResults={searchResults}
+                        onFollowToggle={handleFollowToggle}
+                        onViewProfile={(username) => navigate(`/user/${username}`)}
+                    />
                 </div>
             </div>
 

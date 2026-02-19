@@ -40,3 +40,10 @@ export { useTaskMutations } from './useTaskMutations';
 
 // Utility hooks
 export { useMidnightCountdown } from './useMidnightCountdown';
+
+// Lobby hooks
+export { useActiveSession } from './lobby/useActiveSession';
+export { useInviteForm } from './lobby/useInviteForm';
+
+// Arena hooks
+export { useBattleCountdown, useBattleScores } from './arena';
