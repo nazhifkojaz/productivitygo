@@ -55,7 +55,10 @@ async def process_battle_rounds(battle: dict) -> int:
     date2 = get_local_date(tz2)
 
     # Check how many rounds should be processed
-    days_since_start = (date.today() - start_date).days
+    # Use max of both players' local dates to ensure fair processing
+    # A round is eligible only when BOTH players have finished their day
+    latest_local_date = max(date1, date2)
+    days_since_start = (latest_local_date - start_date).days
     rounds_to_process = min(days_since_start, duration)
 
     if current_round >= rounds_to_process:

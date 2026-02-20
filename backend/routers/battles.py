@@ -121,7 +121,7 @@ async def get_current_battle(user = Depends(get_current_user)):
 
     # Step 6: Build rival intelligence
     if app_state in ['IN_BATTLE', 'LAST_BATTLE_DAY']:
-        today_str = date.today().isoformat()
+        today_str = user_today.isoformat()  # Use user's local date, not UTC
         total_tasks, completed_tasks = await BattleQueryService.fetch_rival_tasks_for_today(
             rival_id, today_str
         )
