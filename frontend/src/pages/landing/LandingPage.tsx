@@ -106,13 +106,11 @@ export default function LandingPage() {
             className="bg-white border-4 border-black p-6 sm:p-8 md:p-12 shadow-[8px_8px_0_0_#000] sm:shadow-[10px_10px_0_0_#000] md:shadow-[12px_12px_0_0_#000]"
           >
             <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center">
-              <div className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-landing-yellow border-4 border-black flex items-center justify-center flex-shrink-0">
-                <img
-                  src="https://pbs.twimg.com/profile_images/1981334268497321984/N1K60iL1_400x400.jpg"  // Place in frontend/public/
-                  alt="Creator photo"
-                  className="w-48 h-48 border-4 border-black object-cover flex-shrink-0"
-                />
-              </div>
+              <img
+                src="https://pbs.twimg.com/profile_images/1981334268497321984/N1K60iL1_400x400.jpg"
+                alt="Creator photo"
+                className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 border-4 border-black object-cover flex-shrink-0"
+              />
               <div className="flex-1">
                 <h2 className="text-3xl sm:text-4xl font-bold text-black mb-4 sm:mb-6 tracking-tighter">ABOUT THE CREATOR</h2>
                 <p className="text-base sm:text-lg md:text-xl text-black/90 mb-4 sm:mb-6 leading-relaxed">
