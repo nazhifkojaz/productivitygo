@@ -112,7 +112,12 @@ class TestProfileQueryColumns:
         expected = {
             "id", "username", "email", "level", "total_xp_earned",
             "battle_count", "battle_win_count", "completed_tasks",
-            "avatar_emoji", "timezone"
+            "avatar_emoji", "timezone",
+            "current_battle", "current_adventure",
+            "adventure_count", "monster_defeats",
+            "monster_escapes", "monster_rating",
+            "highest_tier_reached", "total_damage_dealt",
+            "created_at",
         }
         actual = set(PROFILE_PRIVATE.split(", "))
         assert actual == expected
