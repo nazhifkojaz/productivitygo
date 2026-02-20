@@ -14,12 +14,12 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from datetime import date, timedelta, datetime
-import pytz
 
 from database import supabase
 from dependencies import get_current_user
 from services.adventure_service import AdventureService
 from utils.query_columns import ADVENTURE_WITH_MONSTER
+from utils.timezone import get_local_date
 from utils.logging_config import get_logger
 
 router = APIRouter(prefix="/adventures", tags=["adventures"])
@@ -35,7 +35,6 @@ async def get_monster_pool(user = Depends(get_current_user)):
     Higher rating = more high-tier monsters.
     Refresh count resets to 3 for each new adventure session.
     """
-    # Get user's rating and initialize refresh count
     profile_res = await supabase.table("profiles").select("monster_rating")\
         .eq("id", user.id).single().execute()
 
@@ -44,10 +43,8 @@ async def get_monster_pool(user = Depends(get_current_user)):
 
     rating = profile_res.data.get('monster_rating', 0)
 
-    # Initialize/refresh count from database (resets if new session)
     remaining = await AdventureService.initialize_refresh_count(user.id)
 
-    # Get weighted pool
     pool = await AdventureService.get_weighted_monster_pool(rating, count=4)
 
     return {
@@ -63,7 +60,6 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
     """
     Refresh monster pool. Max 3 refreshes per adventure start.
     """
-    # Get user's rating
     profile_res = await supabase.table("profiles").select("monster_rating")\
         .eq("id", user.id).single().execute()
 
@@ -72,7 +68,6 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
 
     rating = profile_res.data.get('monster_rating', 0)
 
-    # Decrement refresh count (raises exception if none remaining)
     try:
         remaining = await AdventureService.decrement_refresh_count(user.id)
     except HTTPException:
@@ -81,7 +76,6 @@ async def refresh_monster_pool(user = Depends(get_current_user)):
             detail="No refreshes remaining. Select a monster or start over."
         )
 
-    # Get new pool
     pool = await AdventureService.get_weighted_monster_pool(rating, count=4)
 
     return {
@@ -106,7 +100,6 @@ async def start_adventure(body: dict, user = Depends(get_current_user)):
 
     adventure = await AdventureService.create_adventure(user.id, monster_id)
 
-    # Fetch with monster data for response
     full_adventure = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
         .eq("id", adventure['id']).single().execute()
 
@@ -155,14 +148,12 @@ async def get_current_adventure(user = Depends(get_current_user)):
     """
     Get the user's active adventure with monster info, app state, and discoveries.
     """
-    # Fetch active adventure with monster
     try:
         res = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
             .eq("user_id", user.id)\
             .eq("status", "active")\
             .single().execute()
     except Exception:
-        # No active adventure found
         raise HTTPException(status_code=404, detail="No active adventure found")
 
     if not res.data:
@@ -170,31 +161,22 @@ async def get_current_adventure(user = Depends(get_current_user)):
 
     adventure = res.data
 
-    # --- LAZY EVALUATION TRIGGER (Backup) ---
-    # Process any missed rounds before returning adventure data
-    # This ensures adventure state is up-to-date even if app was sleeping
     if adventure['status'] == 'active':
         from utils.adventure_processor import process_adventure_rounds
         rounds_processed = await process_adventure_rounds(adventure)
         if rounds_processed > 0:
-            # Reload adventure to get updated status/current_round/HP
             adventure_reload = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
                 .eq("id", adventure['id']).single().execute()
             if adventure_reload.data:
                 adventure = adventure_reload.data
 
-    # Get user timezone for app state calculation
     profile_res = await supabase.table("profiles").select("timezone")\
         .eq("id", user.id).single().execute()
 
     user_tz = profile_res.data.get('timezone', 'UTC') if profile_res.data else 'UTC'
 
-    try:
-        user_today = datetime.now(pytz.timezone(user_tz)).date()
-    except pytz.exceptions.UnknownTimeZoneError:
-        user_today = datetime.now(pytz.utc).date()
+    user_today = get_local_date(user_tz)
 
-    # Calculate app state
     start_date = date.fromisoformat(adventure['start_date'])
     deadline = date.fromisoformat(adventure['deadline'])
 
@@ -211,11 +193,9 @@ async def get_current_adventure(user = Depends(get_current_user)):
 
     adventure['app_state'] = app_state
 
-    # Calculate days remaining
     days_remaining = (deadline - user_today).days
     adventure['days_remaining'] = max(days_remaining, 0)
 
-    # Fetch discoveries for current monster's type
     monster_type = adventure.get('monster', {}).get('monster_type')
     if monster_type:
         disc_res = await supabase.table("type_discoveries").select(
@@ -233,7 +213,6 @@ async def get_adventure_details(adventure_id: str, user = Depends(get_current_us
     """
     Get adventure details including daily breakdown.
     """
-    # Fetch adventure with monster
     try:
         res = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
             .eq("id", adventure_id).single().execute()
@@ -245,23 +224,18 @@ async def get_adventure_details(adventure_id: str, user = Depends(get_current_us
 
     adventure = res.data
 
-    # Verify ownership
     if adventure['user_id'] != user.id:
         raise HTTPException(status_code=403, detail="Not your adventure")
 
-    # --- LAZY EVALUATION TRIGGER (Backup) ---
-    # Process any missed rounds before returning adventure data
     if adventure['status'] == 'active':
         from utils.adventure_processor import process_adventure_rounds
         rounds_processed = await process_adventure_rounds(adventure)
         if rounds_processed > 0:
-            # Reload adventure to get updated status/current_round/HP
             adventure_reload = await supabase.table("adventures").select(ADVENTURE_WITH_MONSTER)\
                 .eq("id", adventure_id).single().execute()
             if adventure_reload.data:
                 adventure = adventure_reload.data
 
-    # Fetch daily breakdown
     entries_res = await supabase.table("daily_entries").select("date, daily_xp")\
         .eq("adventure_id", adventure_id)\
         .order("date")\
