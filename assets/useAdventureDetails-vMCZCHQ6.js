@@ -1,0 +1,1 @@
+import{_ as e,g as t,x as n}from"./index-BaTJY1Bh.js";function r(r){let{session:i}=e();return n({queryKey:[`adventures`,r],queryFn:async()=>{let{data:e}=await t.get(`/api/adventures/${r}`,{headers:{Authorization:`Bearer ${i?.access_token}`}});return e},enabled:!!i?.access_token&&!!r})}export{r as t};

@@ -1,0 +1,1 @@
+import{_ as e,g as t,x as n}from"./index-BaTJY1Bh.js";function r(r){let{session:i}=e();return n({queryKey:[`publicProfile`,r],queryFn:async()=>{let{data:e}=await t.get(`/api/users/${r}/public_profile`,{headers:{Authorization:`Bearer ${i?.access_token}`}});return e},enabled:!!r&&!!i?.access_token})}export{r as t};
