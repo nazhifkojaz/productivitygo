@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 
 type MaxWidth = 'max-w-sm' | 'max-w-md' | 'max-w-lg' | 'max-w-xl' | 'max-w-2xl' | 'max-w-4xl';
 type MaxHeight = 'max-h-[80vh]' | 'max-h-[90vh]' | 'max-h-[95vh]';
-type Padding = 'p-4' | 'p-6' | 'p-8';
+type Padding = 'p-0' | 'p-4' | 'p-6' | 'p-8';
 
 interface NeoModalProps {
     isOpen: boolean;

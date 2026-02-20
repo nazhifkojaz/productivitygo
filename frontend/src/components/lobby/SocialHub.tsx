@@ -1,11 +1,3 @@
-/**
- * SocialHub component.
- *
- * Tab system for following, followers, and user search.
- *
- * REFACTOR-005: Phase 5 - Item 6.2
- */
-
 import { Users, Search } from 'lucide-react';
 import TabButton from '../TabButton';
 import UserCard from '../UserCard';

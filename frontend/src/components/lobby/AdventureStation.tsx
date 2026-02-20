@@ -1,11 +1,3 @@
-/**
- * AdventureStation component.
- *
- * Button to start a new adventure.
- *
- * REFACTOR-005: Phase 5 - Item 6.2
- */
-
 import { Compass } from 'lucide-react';
 
 interface AdventureStationProps {

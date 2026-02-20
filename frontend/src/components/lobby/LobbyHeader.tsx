@@ -1,11 +1,3 @@
-/**
- * LobbyHeader component.
- *
- * Displays user avatar, username, level, rank, and profile button.
- *
- * REFACTOR-005: Phase 5 - Item 6.2
- */
-
 import { useNavigate } from 'react-router-dom';
 import { User } from 'lucide-react';
 import type { LobbyProfileData } from '../../types/lobby';

@@ -1,11 +1,3 @@
-/**
- * LobbyStatsPanel component.
- *
- * Displays stats cards, match history, and pending invites.
- *
- * REFACTOR-005: Phase 5 - Item 6.2
- */
-
 import { Trophy, Swords, Target, Star, Mail } from 'lucide-react';
 import StatCard from '../StatCard';
 import MatchHistoryItem from '../MatchHistoryItem';
@@ -45,7 +37,6 @@ export function LobbyStatsPanel({
 
     return (
         <div className="md:col-span-4 space-y-6">
-            {/* Stats Card */}
             <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
                 <div className="bg-black text-white p-3 border-b-4 border-black">
                     <h3 className="text-sm font-black uppercase font-mono">// STATISTICS</h3>
@@ -78,7 +69,6 @@ export function LobbyStatsPanel({
                 </div>
             </div>
 
-            {/* Match History */}
             <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000]">
                 <div className="bg-black text-white p-3 border-b-4 border-black">
                     <h3 className="text-sm font-black uppercase font-mono">// RECENT BATTLES</h3>
@@ -103,7 +93,6 @@ export function LobbyStatsPanel({
                 </div>
             </div>
 
-            {/* Pending Invites */}
             {invites.length > 0 && (
                 <div className="bg-[#F4A261] border-4 border-black shadow-[6px_6px_0_0_#000] p-6">
                     <h3 className="text-xl font-black uppercase mb-4 flex items-center gap-2">

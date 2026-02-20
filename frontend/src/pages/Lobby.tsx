@@ -15,28 +15,18 @@ import { useAdventureMutations } from '../hooks/useAdventureMutations';
 import { useUserSearch } from '../hooks/useUserSearch';
 import { useActiveSession } from '../hooks/lobby/useActiveSession';
 import { useInviteForm } from '../hooks/lobby/useInviteForm';
-import { LobbyHeader } from '../components/lobby/LobbyHeader';
-import { LobbyStatsPanel } from '../components/lobby/LobbyStatsPanel';
-import { BattleStation } from '../components/lobby/BattleStation';
-import { AdventureStation } from '../components/lobby/AdventureStation';
-import { SocialHub } from '../components/lobby/SocialHub';
+import {
+    LobbyHeader,
+    LobbyStatsPanel,
+    BattleStation,
+    AdventureStation,
+    SocialHub,
+} from '../components/lobby';
 import type { SocialTab } from '../types/lobby';
 
-/**
- * Lobby page - Main dashboard for the app.
- *
- * Displays user profile, stats, battle station, adventure station,
- * and social hub for following/following users.
- *
- * REFACTOR-005: Phase 5 - Item 6.2
- * - Extracted components for better maintainability
- * - Extracted hooks for session detection and form state
- * - Reduced from 567 lines to ~150 lines
- */
 export default function Lobby() {
     const navigate = useNavigate();
 
-    // React Query hooks
     const { data: profile } = useProfile();
     const { data: invites = [] } = useBattleInvites();
     const { data: following = [] } = useFollowing();
@@ -44,23 +34,18 @@ export default function Lobby() {
     const { followMutation, unfollowMutation } = useSocialMutations();
     const { acceptInviteMutation, rejectInviteMutation } = useBattleMutations();
 
-    // Adventure hooks
     const [showMonsterSelect, setShowMonsterSelect] = useState(false);
     const { data: monsterPool } = useMonsters();
     const { startAdventureMutation, refreshMonstersMutation } = useAdventureMutations();
     const { refetch: refetchProfile } = useProfile();
 
-    // Active session detection
     const { showBanner, bannerProps } = useActiveSession(profile);
 
-    // Invite form hook
     const inviteForm = useInviteForm();
 
-    // Social state
     const [activeTab, setActiveTab] = useState<SocialTab['following']>('following');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Debounced search for SocialHub
     const [debouncedQuery, setDebouncedQuery] = useState('');
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
@@ -69,7 +54,6 @@ export default function Lobby() {
 
     const { data: searchResults = [] } = useUserSearch(debouncedQuery);
 
-    // Event handlers
     const handleFollowToggle = async (userId: string, isCurrentlyFollowing: boolean) => {
         try {
             if (isCurrentlyFollowing) {
@@ -126,10 +110,7 @@ export default function Lobby() {
 
     return (
         <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8">
-            {/* Header */}
             <LobbyHeader profile={profile} />
-
-            {/* Active Session Banner */}
             {showBanner && bannerProps && (
                 <div className="max-w-6xl mx-auto mb-8">
                     <ActiveSessionBanner
@@ -140,7 +121,6 @@ export default function Lobby() {
             )}
 
             <div className="max-w-6xl mx-auto grid md:grid-cols-12 gap-6">
-                {/* Left Column - Stats */}
                 <LobbyStatsPanel
                     profile={profile}
                     invites={invites}
@@ -148,7 +128,6 @@ export default function Lobby() {
                     onRejectInvite={handleReject}
                 />
 
-                {/* Right Column - Battle Station & Social Hub */}
                 <div className="md:col-span-8 space-y-6">
                     {!showBanner && (
                         <>
@@ -173,7 +152,6 @@ export default function Lobby() {
                 </div>
             </div>
 
-            {/* Monster Select Modal */}
             <NeoModal
                 isOpen={showMonsterSelect && !!monsterPool}
                 onClose={() => setShowMonsterSelect(false)}

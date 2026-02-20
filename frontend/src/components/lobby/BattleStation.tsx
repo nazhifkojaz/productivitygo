@@ -1,11 +1,3 @@
-/**
- * BattleStation component.
- *
- * Form for creating and sending battle challenges.
- *
- * REFACTOR-005: Phase 5 - Item 6.2
- */
-
 import { Swords, Mail, Loader } from 'lucide-react';
 
 export interface BattleStationProps {
@@ -32,7 +24,6 @@ export function BattleStation({ searchEmail, setSearchEmail, startDate, setStart
             </div>
 
             <div className="p-6 grid md:grid-cols-2 gap-6">
-                {/* Settings */}
                 <div className="space-y-4">
                     <div>
                         <label className="block text-xs font-black uppercase font-mono mb-2">
@@ -74,7 +65,6 @@ export function BattleStation({ searchEmail, setSearchEmail, startDate, setStart
                     </div>
                 </div>
 
-                {/* Challenge Form */}
                 <div className="space-y-11">
                     <div>
                         <label className="block text-xs font-black uppercase font-mono mb-2">
