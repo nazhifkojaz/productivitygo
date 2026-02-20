@@ -12,6 +12,7 @@ from utils.rank_calculations import (
 from utils.stats import format_win_rate
 from utils.logging_config import get_logger
 from utils.query_columns import PROFILE_PRIVATE, BATTLE_MATCH_HISTORY, PROFILE_TIMEZONE, ADVENTURE_MATCH_HISTORY
+from utils.profile_helpers import batch_fetch_rival_usernames, enrich_battle_history
 from database import async_retry_on_connection_error
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -79,12 +80,31 @@ async def get_profile(user = Depends(get_current_user)):
         level = profile.get('level', 1)
         rank = calculate_rank(level, battle_count, battle_win_count)
 
+        # Adventure stats from PROFILE_PRIVATE (Feature 3)
+        adventure_count = profile.get("adventure_count", 0)
+        monster_defeats = profile.get("monster_defeats", 0)
+
         profile["stats"] = {
+            # PvP stats
             "battle_wins": battle_win_count,
             "total_xp": profile.get("total_xp_earned", 0),
             "battle_fought": battle_count,
             "win_rate": win_rate_str,
-            "tasks_completed": profile.get("completed_tasks", 0)
+            "tasks_completed": profile.get("completed_tasks", 0),
+
+            # Adventure stats (Feature 3)
+            "monster_rating": profile.get("monster_rating", 0),
+            "monster_defeats": monster_defeats,
+            "monster_escapes": profile.get("monster_escapes", 0),
+            "adventure_count": adventure_count,
+            "highest_tier_reached": profile.get("highest_tier_reached", "easy"),
+            "total_damage_dealt": profile.get("total_damage_dealt", 0),
+
+            # Derived stats (Feature 3)
+            "adventure_completion_rate": format_win_rate(monster_defeats, adventure_count),
+            "avg_damage_per_adventure": (
+                profile.get("total_damage_dealt", 0) // adventure_count
+            ) if adventure_count > 0 else 0,
         }
         profile["rank"] = rank
 
@@ -98,38 +118,9 @@ async def get_profile(user = Depends(get_current_user)):
 
         match_history = battles_res.data
 
-        # Collect unique rival IDs
-        rival_ids = set()
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
-            rival_ids.add(rival_id)
-
-        # Batch fetch all rivals in single query
-        rivals_map = {}
-        if rival_ids:
-            rivals_res = await supabase.table("profiles").select("id, username").in_("id", list(rival_ids)).execute()
-            rivals_map = {r['id']: r['username'] for r in rivals_res.data}
-
-        # Enrich match history with rival names
-        enriched_history = []
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user.id else battle['user1_id']
-            rival_name = rivals_map.get(rival_id, "Unknown")
-
-            result = "DRAW"
-            if battle.get('winner_id') == user.id:
-                result = "WIN"
-            elif battle.get('winner_id') == rival_id:
-                result = "LOSS"
-
-            enriched_history.append({
-                "id": battle['id'],
-                "date": battle['end_date'],
-                "rival": rival_name,
-                "result": result,
-                "duration": battle.get('duration', 5),
-                "type": "battle"
-            })
+        # REFACTOR-007: Use centralized rival batch-fetch and enrichment
+        rivals_map = await batch_fetch_rival_usernames(match_history, user.id)
+        enriched_history = enrich_battle_history(match_history, user.id, rivals_map, include_type=True)
 
         # Fetch Adventure History (Last 10 completed/escaped adventures)
         adventures_res = await supabase.table("adventures").select(ADVENTURE_MATCH_HISTORY)\
@@ -145,12 +136,12 @@ async def get_profile(user = Depends(get_current_user)):
         monster_ids = [adv.get('monster_id') for adv in adventure_history if adv.get('monster_id')]
         monsters_map = {}
         if monster_ids:
-            monsters_res = await supabase.table("monsters").select("id, name, emoji", "tier").in_("id", list(set(monster_ids))).execute()
+            monsters_res = await supabase.table("monsters").select("id, name, emoji, tier").in_("id", list(set(monster_ids))).execute()
             monsters_map = {m['id']: m for m in monsters_res.data}
 
         # Enrich adventure history
         enriched_adventures = []
-        for adventure in adventure_history:
+        for idx, adventure in enumerate(adventure_history):
             monster = monsters_map.get(adventure.get('monster_id'), {})
 
             # Determine result based on status and damage
@@ -161,8 +152,13 @@ async def get_profile(user = Depends(get_current_user)):
             else:
                 result = "COMPLETED"
 
+            # Ensure we always have a valid ID (fallback to index if missing/empty)
+            adventure_id = adventure.get('id')
+            if not adventure_id or not str(adventure_id).strip():
+                adventure_id = f"adventure-fallback-{idx}"
+
             enriched_adventures.append({
-                "id": adventure['id'],
+                "id": adventure_id,
                 "date": adventure.get('completed_at'),
                 "rival": monster.get('name', 'Unknown Monster'),
                 "emoji": monster.get('emoji', '👾'),
@@ -241,7 +237,10 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
     async def fetch_profile_data(user_id: str):
         """Fetch profile with retry on connection errors"""
         return await supabase.table("profiles").select(
-            "id, username, level, email, avatar_emoji, battle_win_count, total_xp_earned, battle_count, completed_tasks"
+            "id, username, level, email, avatar_emoji, battle_win_count, total_xp_earned, "
+            "battle_count, completed_tasks, adventure_count, monster_defeats, "
+            "monster_escapes, monster_rating, highest_tier_reached, total_damage_dealt, "
+            "created_at"
         ).eq("id", user_id).single().execute()
 
     try:
@@ -280,6 +279,10 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
         battle_win_count = profile.get('battle_win_count', 0)
         win_rate_str = format_win_rate(battle_win_count, battle_count)
 
+        # Adventure stats (Feature 3)
+        adventure_count = profile.get('adventure_count', 0)
+        monster_defeats = profile.get('monster_defeats', 0)
+
         # Calculate rank
         level = profile.get('level', 1)
         rank = calculate_rank(level, battle_count, battle_win_count)
@@ -294,37 +297,60 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
 
         match_history = battles_res.data
 
-        # Collect unique rival IDs
-        rival_ids = set()
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
-            rival_ids.add(rival_id)
+        # REFACTOR-007: Use centralized rival batch-fetch and enrichment
+        rivals_map = await batch_fetch_rival_usernames(match_history, user_id)
+        enriched_history = enrich_battle_history(match_history, user_id, rivals_map, include_type=True)
 
-        # Batch fetch all rivals in single query (fixes N+1 issue)
-        rivals_map = {}
-        if rival_ids:
-            rivals_res = await supabase.table("profiles").select("id, username").in_("id", list(rival_ids)).execute()
-            rivals_map = {r['id']: r['username'] for r in rivals_res.data}
+        # Fetch Adventure History (Last 5 completed/escaped adventures)
+        adventures_res = await supabase.table("adventures").select(ADVENTURE_MATCH_HISTORY)\
+            .eq("user_id", user_id)\
+            .in_("status", ["completed", "escaped"])\
+            .order("completed_at", desc=True)\
+            .limit(5)\
+            .execute()
 
-        # Enrich match history with rival names
-        enriched_history = []
-        for battle in match_history:
-            rival_id = battle['user2_id'] if battle['user1_id'] == user_id else battle['user1_id']
-            rival_name = rivals_map.get(rival_id, "Unknown")
+        adventure_history = adventures_res.data
 
-            result = "DRAW"
-            if battle.get('winner_id') == user_id:
+        # Batch fetch monsters for adventure history
+        monster_ids = [adv.get('monster_id') for adv in adventure_history if adv.get('monster_id')]
+        monsters_map = {}
+        if monster_ids:
+            monsters_res = await supabase.table("monsters").select("id, name, emoji, tier").in_("id", list(set(monster_ids))).execute()
+            monsters_map = {m['id']: m for m in monsters_res.data}
+
+        # Enrich adventure history
+        enriched_adventures = []
+        for idx, adventure in enumerate(adventure_history):
+            monster = monsters_map.get(adventure.get('monster_id'), {})
+
+            # Determine result based on status
+            if adventure.get('status') == 'escaped':
+                result = "ESCAPED"
+            elif adventure.get('status') == 'completed':
+                result = "COMPLETED"
+            else:
                 result = "WIN"
-            elif battle.get('winner_id') == rival_id:
-                result = "LOSS"
 
-            enriched_history.append({
-                "id": battle['id'],
-                "date": battle['end_date'],
-                "rival": rival_name,
+            # Ensure we always have a valid ID (fallback to index if missing/empty)
+            adventure_id = adventure.get('id')
+            if not adventure_id or not str(adventure_id).strip():
+                adventure_id = f"adventure-fallback-{idx}"
+
+            enriched_adventures.append({
+                "id": adventure_id,
+                "date": adventure.get('completed_at'),
+                "rival": monster.get('name', 'Unknown Monster'),
+                "emoji": monster.get('emoji', '👾'),
                 "result": result,
-                "duration": battle.get('duration', 5)
+                "duration": adventure.get('duration', 5),
+                "xp_earned": adventure.get('xp_earned', 0),
+                "type": "adventure"
             })
+
+        # Combine battle and adventure history, sorted by date
+        combined_history = enriched_history + enriched_adventures
+        combined_history.sort(key=lambda x: x.get('date', ''), reverse=True)
+        combined_history = combined_history[:10]  # Limit to 10 total entries
 
         return {
             "id": profile['id'],
@@ -334,13 +360,29 @@ async def get_public_profile(identifier: str, current_user = Depends(get_current
             "avatar_emoji": profile.get('avatar_emoji', '😀'),  # Default to smiley
             "is_following": is_following,
             "stats": {
+                # PvP stats
                 "battle_wins": battle_win_count,
                 "total_xp": profile.get('total_xp_earned', 0),
                 "battle_fought": battle_count,
                 "win_rate": win_rate_str,
-                "tasks_completed": profile.get("completed_tasks", 0)
+                "tasks_completed": profile.get("completed_tasks", 0),
+
+                # Adventure stats (Feature 3)
+                "monster_rating": profile.get("monster_rating", 0),
+                "monster_defeats": monster_defeats,
+                "monster_escapes": profile.get("monster_escapes", 0),
+                "adventure_count": adventure_count,
+                "highest_tier_reached": profile.get("highest_tier_reached", "easy"),
+                "total_damage_dealt": profile.get("total_damage_dealt", 0),
+
+                # Derived stats (Feature 3)
+                "adventure_completion_rate": format_win_rate(monster_defeats, adventure_count),
+                "avg_damage_per_adventure": (
+                    profile.get("total_damage_dealt", 0) // adventure_count
+                ) if adventure_count > 0 else 0,
             },
-            "match_history": enriched_history
+            "created_at": profile.get("created_at"),
+            "match_history": combined_history
         }
 
     except HTTPException:

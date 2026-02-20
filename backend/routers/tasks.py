@@ -10,16 +10,9 @@ from models import TaskCreate, Task
 from utils.quota import get_daily_quota
 from utils.game_session import get_active_game_session, get_daily_entry_key
 from utils.query_columns import PROFILE_TIMEZONE, TASKS_FULL
+from utils.timezone import get_local_date
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-
-def get_user_date(timezone_str: str) -> date:
-    """Get user's local date, falling back to UTC for invalid timezones."""
-    try:
-        tz = pytz.timezone(timezone_str)
-        return datetime.now(tz).date()
-    except pytz.exceptions.UnknownTimeZoneError:
-        return datetime.now(pytz.utc).date()
 
 @router.get("/quota", operation_id="get_daily_quota")
 async def get_quota(date_str: str = None, user = Depends(get_current_user)):
@@ -32,7 +25,7 @@ async def get_quota(date_str: str = None, user = Depends(get_current_user)):
         # Default to tomorrow (planning mode)
         profile_res = await supabase.table("profiles").select("timezone").eq("id", user.id).single().execute()
         timezone = profile_res.data['timezone'] if profile_res.data else "UTC"
-        user_today = get_user_date(timezone)
+        user_today = get_local_date(timezone)
         target_date = user_today + timedelta(days=1)
 
     quota = get_daily_quota(target_date)
@@ -48,7 +41,7 @@ async def draft_tasks(tasks: List[TaskCreate], user = Depends(get_current_user))
     profile = profile_res.data
 
     # 2. Determine "Tomorrow" for the user
-    user_today = get_user_date(profile['timezone'])
+    user_today = get_local_date(profile['timezone'])
     user_tomorrow = user_today + timedelta(days=1)
 
     # Calculate Quota
@@ -151,7 +144,7 @@ async def get_today_tasks(user = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Profile not found")
 
     profile = profile_res.data
-    user_today = get_user_date(profile['timezone'])
+    user_today = get_local_date(profile['timezone'])
 
     # 2. Find Daily Entry for Today
     # We join with tasks manually or via separate query
@@ -178,7 +171,7 @@ async def get_draft_tasks(user = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Profile not found")
 
     profile = profile_res.data
-    user_today = get_user_date(profile['timezone'])
+    user_today = get_local_date(profile['timezone'])
     user_tomorrow = user_today + timedelta(days=1)
 
     # 2. Find Daily Entry for Tomorrow

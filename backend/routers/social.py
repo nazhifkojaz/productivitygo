@@ -5,6 +5,7 @@ from database import supabase
 from dependencies import get_current_user
 from utils.logging_config import get_logger
 from utils.rank_calculations import calculate_rank
+from utils.profile_helpers import build_user_profiles_list
 from database import async_retry_on_connection_error
 
 router = APIRouter(prefix="/social", tags=["social"])
@@ -66,20 +67,8 @@ async def get_following(current_user = Depends(get_current_user)):
         # Get profiles with specific columns only
         profiles = await supabase.table("profiles").select("id, username, level, total_xp_earned, battle_win_count, battle_count, avatar_emoji").in_("id", following_ids).execute()
 
-        # Build response with only needed fields
-        result = []
-        for profile in profiles.data:
-            level = profile.get('level', 1)
-            result.append({
-                'id': profile['id'],
-                'username': profile.get('username', 'Unknown'),
-                'level': level,
-                'rank': calculate_rank(level, profile.get('battle_count', 0), profile.get('battle_win_count', 0)),
-                'avatar_url': None,
-                'avatar_emoji': profile.get('avatar_emoji', '😀')
-            })
-
-        return result
+        # REFACTOR-007: Use centralized profile builder
+        return build_user_profiles_list(profiles.data)
 
     try:
         return await fetch_following()
@@ -102,20 +91,8 @@ async def get_followers(current_user = Depends(get_current_user)):
         # Get profiles
         profiles = await supabase.table("profiles").select("id, username, level, total_xp_earned, battle_win_count, battle_count, avatar_emoji").in_("id", follower_ids).execute()
 
-        # Build response with only needed fields
-        result = []
-        for profile in profiles.data:
-            level = profile.get('level', 1)
-            result.append({
-                'id': profile['id'],
-                'username': profile.get('username', 'Unknown'),
-                'level': level,
-                'rank': calculate_rank(level, profile.get('battle_count', 0), profile.get('battle_win_count', 0)),
-                'avatar_url': None,
-                'avatar_emoji': profile.get('avatar_emoji', '😀')
-            })
-
-        return result
+        # REFACTOR-007: Use centralized profile builder
+        return build_user_profiles_list(profiles.data)
 
     try:
         return await fetch_followers()
@@ -135,17 +112,5 @@ async def search_users(q: str, current_user = Depends(get_current_user)):
         .limit(10)\
         .execute()
 
-    # Build response with only needed fields
-    result = []
-    for profile in profiles.data:
-        level = profile.get('level', 1)
-        result.append({
-            'id': profile['id'],
-            'username': profile.get('username', 'Unknown'),
-            'level': level,
-            'rank': calculate_rank(level, profile.get('battle_count', 0), profile.get('battle_win_count', 0)),
-            'avatar_url': None,
-            'avatar_emoji': profile.get('avatar_emoji', '😀')
-        })
-
-    return result
+    # REFACTOR-007: Use centralized profile builder
+    return build_user_profiles_list(profiles.data)

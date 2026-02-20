@@ -100,12 +100,12 @@ export default function MonsterSelect({
 
             {/* Monster Grid (2x2) */}
             <div className="grid grid-cols-2 gap-4">
-                {monsters.map((monster) => {
+                {monsters.map((monster, i: number) => {
                     const style = TIER_STYLES[monster.tier] || TIER_STYLES.easy;
 
                     return (
                         <motion.button
-                            key={monster.id}
+                            key={monster.id || `monster-${i}`}
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => onSelect(monster.id)}

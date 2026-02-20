@@ -5,7 +5,7 @@ REFACTOR-004: Add GameMode enum for clear distinction between game types.
 This provides type safety and clarity as we add single player adventure mode.
 """
 from enum import Enum
-from typing import Union
+from typing import Optional
 
 
 class GameMode(str, Enum):
@@ -24,4 +24,4 @@ class GameMode(str, Enum):
 
 
 # Type alias for game session ID (can be battle_id or adventure_id)
-GameSessionID = Union[str, None]
+GameSessionID = Optional[str]

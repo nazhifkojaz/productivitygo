@@ -90,21 +90,21 @@ class TestTimezoneEdgeCases:
         assert result == datetime.now(pytz.utc).date()
 
 
-class TestGetUserDate:
-    """Test get_user_date function from tasks.py router"""
+class TestGetLocalDate:
+    """Test get_local_date function from utils.timezone"""
 
-    def test_get_user_date_valid_timezone(self):
-        """Import and test get_user_date from tasks router."""
-        from routers.tasks import get_user_date
+    def test_get_local_date_valid_timezone(self):
+        """Import and test get_local_date from utils.timezone."""
+        from utils.timezone import get_local_date
 
-        result = get_user_date("America/Chicago")
+        result = get_local_date("America/Chicago")
         assert isinstance(result, date)
 
-    def test_get_user_date_invalid_timezone(self):
-        """Test get_user_date falls back to UTC for invalid timezone."""
-        from routers.tasks import get_user_date
+    def test_get_local_date_invalid_timezone(self):
+        """Test get_local_date falls back to UTC for invalid timezone."""
+        from utils.timezone import get_local_date
 
-        result = get_user_date("Invalid/Timezone")
+        result = get_local_date("Invalid/Timezone")
         assert isinstance(result, date)
         # Should be UTC date
         assert result == datetime.now(pytz.utc).date()

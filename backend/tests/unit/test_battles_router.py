@@ -21,7 +21,7 @@ class TestGetCurrentBattleNullProfileHandling:
 
     async def test_normal_case_both_profiles_exist(self, mock_user, sample_battle_with_profiles):
         """Test that normal case works when both profiles exist."""
-        with patch('routers.battles.supabase') as mock_supabase:
+        with patch('services.battle_query_service.supabase') as mock_supabase:
             # Mock process_battle_rounds to return 0 (no rounds processed)
             async def mock_process(*args, **kwargs):
                 return 0
@@ -32,12 +32,16 @@ class TestGetCurrentBattleNullProfileHandling:
                 ))
                 # Mock the daily_entries query (returns empty for rounds played)
                 mock_entries_execute = AsyncMock(return_value=Mock(data=[]))
+                # Mock the reload query
+                mock_reload_execute = AsyncMock(return_value=Mock(data=None))
 
                 # Setup table() to return different mocks based on the table name
                 def mock_table(table_name):
                     if table_name == "battles":
                         mock_obj = Mock()
                         mock_obj.select.return_value.or_.return_value.eq.return_value.execute = mock_battle_execute
+                        mock_obj.select.return_value.eq.return_value.single.return_value.execute = mock_reload_execute
+                        mock_obj.update.return_value.eq.return_value.execute = AsyncMock(return_value=Mock())
                         return mock_obj
                     elif table_name == "daily_entries":
                         mock_obj = Mock()
@@ -46,6 +50,7 @@ class TestGetCurrentBattleNullProfileHandling:
                     return Mock()
 
                 mock_supabase.table.side_effect = mock_table
+                mock_supabase.rpc.return_value.execute = AsyncMock(return_value=Mock(data=None))
 
                 from routers.battles import get_current_battle
                 result = await get_current_battle(mock_user)
@@ -78,7 +83,7 @@ class TestGetCurrentBattleNullProfileHandling:
             }
         }
 
-        with patch('routers.battles.supabase') as mock_supabase:
+        with patch('services.battle_query_service.supabase') as mock_supabase:
             async def mock_process(*args, **kwargs):
                 return 0
             with patch('utils.battle_processor.process_battle_rounds', side_effect=mock_process):
@@ -88,12 +93,16 @@ class TestGetCurrentBattleNullProfileHandling:
                 ))
                 # Mock the daily_entries query (returns empty for rounds played)
                 mock_entries_execute = AsyncMock(return_value=Mock(data=[]))
+                # Mock the reload query
+                mock_reload_execute = AsyncMock(return_value=Mock(data=None))
 
                 # Setup table() to return different mocks based on the table name
                 def mock_table(table_name):
                     if table_name == "battles":
                         mock_obj = Mock()
                         mock_obj.select.return_value.or_.return_value.eq.return_value.execute = mock_battle_execute
+                        mock_obj.select.return_value.eq.return_value.single.return_value.execute = mock_reload_execute
+                        mock_obj.update.return_value.eq.return_value.execute = AsyncMock(return_value=Mock())
                         return mock_obj
                     elif table_name == "daily_entries":
                         mock_obj = Mock()
@@ -102,6 +111,7 @@ class TestGetCurrentBattleNullProfileHandling:
                     return Mock()
 
                 mock_supabase.table.side_effect = mock_table
+                mock_supabase.rpc.return_value.execute = AsyncMock(return_value=Mock(data=None))
 
                 from routers.battles import get_current_battle
 
@@ -135,7 +145,7 @@ class TestGetCurrentBattleNullProfileHandling:
             'user2': None  # Rival's profile is missing!
         }
 
-        with patch('routers.battles.supabase') as mock_supabase:
+        with patch('services.battle_query_service.supabase') as mock_supabase:
             async def mock_process(*args, **kwargs):
                 return 0
             with patch('utils.battle_processor.process_battle_rounds', side_effect=mock_process):
@@ -145,12 +155,16 @@ class TestGetCurrentBattleNullProfileHandling:
                 ))
                 # Mock the daily_entries query (returns empty for rounds played)
                 mock_entries_execute = AsyncMock(return_value=Mock(data=[]))
+                # Mock the reload query
+                mock_reload_execute = AsyncMock(return_value=Mock(data=None))
 
                 # Setup table() to return different mocks based on the table name
                 def mock_table(table_name):
                     if table_name == "battles":
                         mock_obj = Mock()
                         mock_obj.select.return_value.or_.return_value.eq.return_value.execute = mock_battle_execute
+                        mock_obj.select.return_value.eq.return_value.single.return_value.execute = mock_reload_execute
+                        mock_obj.update.return_value.eq.return_value.execute = AsyncMock(return_value=Mock())
                         return mock_obj
                     elif table_name == "daily_entries":
                         mock_obj = Mock()
@@ -159,6 +173,7 @@ class TestGetCurrentBattleNullProfileHandling:
                     return Mock()
 
                 mock_supabase.table.side_effect = mock_table
+                mock_supabase.rpc.return_value.execute = AsyncMock(return_value=Mock(data=None))
 
                 from routers.battles import get_current_battle
 
@@ -186,7 +201,7 @@ class TestGetCurrentBattleNullProfileHandling:
             'user2': None
         }
 
-        with patch('routers.battles.supabase') as mock_supabase:
+        with patch('services.battle_query_service.supabase') as mock_supabase:
             async def mock_process(*args, **kwargs):
                 return 0
             with patch('utils.battle_processor.process_battle_rounds', side_effect=mock_process):
@@ -196,12 +211,16 @@ class TestGetCurrentBattleNullProfileHandling:
                 ))
                 # Mock the daily_entries query (returns empty for rounds played)
                 mock_entries_execute = AsyncMock(return_value=Mock(data=[]))
+                # Mock the reload query
+                mock_reload_execute = AsyncMock(return_value=Mock(data=None))
 
                 # Setup table() to return different mocks based on the table name
                 def mock_table(table_name):
                     if table_name == "battles":
                         mock_obj = Mock()
                         mock_obj.select.return_value.or_.return_value.eq.return_value.execute = mock_battle_execute
+                        mock_obj.select.return_value.eq.return_value.single.return_value.execute = mock_reload_execute
+                        mock_obj.update.return_value.eq.return_value.execute = AsyncMock(return_value=Mock())
                         return mock_obj
                     elif table_name == "daily_entries":
                         mock_obj = Mock()
@@ -210,6 +229,7 @@ class TestGetCurrentBattleNullProfileHandling:
                     return Mock()
 
                 mock_supabase.table.side_effect = mock_table
+                mock_supabase.rpc.return_value.execute = AsyncMock(return_value=Mock(data=None))
 
                 from routers.battles import get_current_battle
 

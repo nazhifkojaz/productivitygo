@@ -1,22 +1,22 @@
 {
-    "name": "ProductivityGo",
-    "short_name": "ProdGo",
-    "description": "Gamified Task Battle App",
-    "theme_color": "#ffffff",
-    "background_color": "#ffffff",
-    "display": "standalone",
-    "icons": [
-        {
-            "src": "logo.svg",
-            "sizes": "any",
-            "type": "image/svg+xml"
-        },
-        {
-            "src": "favicon.svg",
-            "sizes": "any",
-            "type": "image/svg+xml"
-        }
-    ],
-    "start_url": "/",
-    "scope": "/"
+  "name": "ProductivityGO",
+  "short_name": "ProdGo",
+  "description": "Turn your to-do list into an epic adventure. Battle rivals, slay task monsters, and level up your productivity.",
+  "theme_color": "#FF6B6B",
+  "background_color": "#FF6B6B",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/"
 }

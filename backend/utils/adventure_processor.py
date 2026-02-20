@@ -6,34 +6,18 @@ Utility for processing adventure rounds:
 - Called by lazy evaluation on dashboard load
 - Handles deadline checking and completion
 
-REFACTOR-007: Uses centralized logging system.
+REFACTOR-007:
+- Uses centralized logging system.
+- Replaced local get_local_date() with utils.timezone.get_local_date().
 """
 from datetime import date, timedelta, datetime
 import pytz
 from typing import Optional, Dict, Any
 from database import supabase
 from utils.logging_config import get_logger
+from utils.timezone import get_local_date
 
 logger = get_logger(__name__)
-
-
-def get_local_date(tz_str: str) -> date:
-    """
-    Get the current local date for a given timezone.
-
-    Falls back to UTC if timezone is invalid.
-
-    Args:
-        tz_str: Timezone string (e.g., 'America/New_York')
-
-    Returns:
-        Current date in the specified timezone, or UTC if invalid
-    """
-    try:
-        return datetime.now(pytz.timezone(tz_str)).date()
-    except pytz.exceptions.UnknownTimeZoneError:
-        logger.warning(f"Unknown timezone: {tz_str}, falling back to UTC")
-        return datetime.now(pytz.utc).date()
 
 
 async def process_adventure_rounds(adventure: Dict[str, Any]) -> int:

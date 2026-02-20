@@ -24,16 +24,8 @@ export { default as SecuritySettings } from './SecuritySettings';
 
 // User/Social components
 export { default as UserCard } from './UserCard';
-export { default as UserListItem } from './UserListItem';
 
 // Utility components
 export { default as TimezoneSync } from './TimezoneSync';
-
-// Skeleton components (named exports)
-export {
-    ProfileSkeleton,
-    UserListSkeleton,
-    BattleCardSkeleton,
-    DashboardSkeleton,
-    PublicProfileSkeleton,
-} from './Skeletons';
+export { default as MatchHistoryItem } from './MatchHistoryItem';
+export { default as NeoModal } from './NeoModal';

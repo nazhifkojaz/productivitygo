@@ -1,11 +1,14 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit2, ArrowLeft, ChevronLeft, ChevronRight, TrendingUp } from 'lucide-react';
 import RankBadge from '../components/RankBadge';
 import ProfileStats from '../components/ProfileStats';
+import DetailedStatsModal from '../components/DetailedStatsModal';
 import ProfileEditForm from '../components/ProfileEditForm';
 import SecuritySettings from '../components/SecuritySettings';
+import MatchHistoryItem from '../components/MatchHistoryItem';
+import NeoModal from '../components/NeoModal';
 import { useProfileForm } from '../hooks/useProfileForm';
 import type { MatchHistory } from '../types/profile';
 import { useState } from 'react';
@@ -22,8 +25,8 @@ export default function Profile() {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
     const [historyPage, setHistoryPage] = useState(1);
+    const [showStatsModal, setShowStatsModal] = useState(false);
 
-    // Use the custom hook for profile data and mutations
     const {
         profile,
         isLoading,
@@ -36,14 +39,16 @@ export default function Profile() {
         updateProfile,
         updateAvatar,
         updateTimezone,
-        updatePassword,
     } = useProfileForm();
 
-    // Pagination logic
+    // Pagination
     const totalPages = profile?.match_history ? Math.ceil(profile.match_history.length / ITEMS_PER_PAGE) : 1;
     const startIndex = (historyPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
     const currentHistory = profile?.match_history?.slice(startIndex, endIndex) || [];
+
+    // Use absolute index as key to handle empty/duplicate IDs from backend
+    const getMatchKey = (_match: MatchHistory, index: number) => `profile-match-${startIndex + index}`;
 
     const handlePrevPage = () => {
         if (historyPage > 1) setHistoryPage(historyPage - 1);
@@ -54,7 +59,7 @@ export default function Profile() {
     };
 
     return (
-        <div className="min-h-screen bg-[#E8E4D9] p-4 md:p-8 pb-24 flex flex-col items-center">
+        <div className="min-h-screen bg-[#E8E4D9] neo-grid-bg p-4 md:p-8 pb-24 flex flex-col items-center">
 
             {/* Header */}
             <header className="w-full max-w-3xl flex items-stretch gap-4 mb-8">
@@ -115,22 +120,24 @@ export default function Profile() {
                                     <span className="bg-[#457B9D] text-white px-3 py-1 border-2 border-black font-bold text-sm shadow-[2px_2px_0_0_#000]">
                                         [ {profile.rank?.toUpperCase() || 'CHALLENGER'} ]
                                     </span>
-                                    {profile.stats?.current_streak !== undefined && profile.stats.current_streak > 0 && (
-                                        <span className="bg-[#E63946] text-white px-3 py-1 border-2 border-black font-bold text-sm shadow-[2px_2px_0_0_#000]">
-                                            [ 🔥 {profile.stats.current_streak} ]
-                                        </span>
-                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Stats Section - with border separator */}
                         <div className="border-t-3 border-black pt-8">
                             <ProfileStats stats={profile.stats} />
+
+                            <div className="mt-6 flex justify-center">
+                                <button
+                                    onClick={() => setShowStatsModal(true)}
+                                    className="px-8 py-3 bg-[#457B9D] text-white font-black border-3 border-black shadow-[4px_4px_0_0_#000] flex items-center gap-2 hover:translate-y-0.5 hover:shadow-[2px_2px_0_0_#000] transition-all active:translate-y-1 active:shadow-none"
+                                >
+                                    <TrendingUp className="w-5 h-5" aria-hidden="true" /> See Detailed Stats
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Match History Section - now before Settings */}
                     {profile.match_history && profile.match_history.length > 0 && (
                         <div className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000] p-6">
                             <div className="bg-black text-white px-4 py-2 -mx-6 -mt-6 mb-6 font-black uppercase text-sm border-b-4 border-black flex items-center justify-between">
@@ -140,30 +147,8 @@ export default function Profile() {
                                 </span>
                             </div>
                             <div className="space-y-3">
-                                {currentHistory.map((match: MatchHistory) => (
-                                    <div key={match.id} className="bg-[#E8E4D9] border-3 border-black p-4 flex justify-between items-center shadow-[3px_3px_0_0_#000]">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">{match.emoji || '⚔️'}</span>
-                                            <div>
-                                                <div className="font-black text-lg uppercase">
-                                                    {match.type === 'adventure' ? 'VS ' : ''}{match.rival}
-                                                </div>
-                                                <div className="text-xs text-gray-600 font-bold">
-                                                    {new Date(match.date).toLocaleDateString()} • {match.duration} DAYS
-                                                    {match.xp_earned !== undefined && ` • +${match.xp_earned} XP`}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className={`font-black text-xl px-4 py-1 border-2 border-black shadow-[2px_2px_0_0_#000] ${
-                                            match.result === 'WIN' ? 'bg-[#2A9D8F] text-white' :
-                                            match.result === 'LOSS' ? 'bg-[#E63946] text-white' :
-                                            match.result === 'ESCAPED' ? 'bg-[#F4A261] text-white' :
-                                            match.result === 'COMPLETED' ? 'bg-[#457B9D] text-white' :
-                                            'bg-gray-300'
-                                        }`}>
-                                            {match.result}
-                                        </div>
-                                    </div>
+                                {currentHistory.map((match: MatchHistory, index: number) => (
+                                    <MatchHistoryItem key={getMatchKey(match, index)} match={match} />
                                 ))}
                             </div>
 
@@ -206,7 +191,6 @@ export default function Profile() {
                         detectedTimezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
                         onTimezoneSync={updateTimezone}
                         onSignOut={signOut}
-                        onChangePassword={updatePassword}
                     />
 
                 </div>
@@ -223,47 +207,38 @@ export default function Profile() {
                 onClose={() => setIsEditing(false)}
             />
 
-            {/* Emoji Picker Modal */}
             <AnimatePresence>
                 {showEmojiPicker && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-                        onClick={() => setShowEmojiPicker(false)}
+                    <NeoModal
+                        key="emoji-picker-modal"
+                        isOpen={showEmojiPicker}
+                        onClose={() => setShowEmojiPicker(false)}
+                        title="Choose Your Avatar"
+                        showCloseButton={false}
                     >
-                        <motion.div
-                            initial={{ scale: 0.9 }}
-                            animate={{ scale: 1 }}
-                            exit={{ scale: 0.9 }}
-                            className="bg-white border-4 border-black shadow-[6px_6px_0_0_#000] max-w-md w-full p-6"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-xl font-black uppercase">Choose Your Avatar</h2>
+                        <div className="grid grid-cols-6 gap-2">
+                            {EMOJI_OPTIONS.map((emoji) => (
                                 <button
-                                    onClick={() => setShowEmojiPicker(false)}
-                                    className="p-2 hover:bg-gray-100 border-2 border-black shadow-[2px_2px_0_0_#000]"
+                                    key={emoji}
+                                    onClick={() => updateAvatar(emoji)}
+                                    className={`text-4xl p-2 border-2 border-black hover:bg-[#F4A261] transition-all active:translate-y-0.5 ${selectedEmoji === emoji ? 'bg-[#2A9D8F]' : 'bg-white'
+                                        }`}
                                 >
-                                    ←
+                                    {emoji}
                                 </button>
-                            </div>
+                            ))}
+                        </div>
+                    </NeoModal>
+                )}
 
-                            <div className="grid grid-cols-6 gap-2">
-                                {EMOJI_OPTIONS.map((emoji) => (
-                                    <button
-                                        key={emoji}
-                                        onClick={() => updateAvatar(emoji)}
-                                        className={`text-4xl p-2 border-2 border-black hover:bg-[#F4A261] transition-all active:translate-y-0.5 ${selectedEmoji === emoji ? 'bg-[#2A9D8F]' : 'bg-white'
-                                            }`}
-                                    >
-                                        {emoji}
-                                    </button>
-                                ))}
-                            </div>
-                        </motion.div>
-                    </motion.div>
+                {showStatsModal && (
+                    <DetailedStatsModal
+                        key="detailed-stats-modal"
+                        isOpen={showStatsModal}
+                        stats={profile?.stats}
+                        createdAt={profile?.created_at}
+                        onClose={() => setShowStatsModal(false)}
+                    />
                 )}
             </AnimatePresence>
         </div>

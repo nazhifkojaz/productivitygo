@@ -11,7 +11,6 @@ from utils.query_columns import (
     BATTLE_FOR_REMATCH,
     BATTLE_PENDING_CHECK,
     BATTLE_FOR_DECLINE,
-    PROFILE_EXISTS,
     PROFILE_BASIC,
 )
 
@@ -253,19 +252,6 @@ class BattleService:
                 raise HTTPException(status_code=500, detail="Failed to calculate round")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error calculating round: {str(e)}")
-
-    @staticmethod
-    async def archive_battle(battle_id: str):
-        # Verify battle exists
-        battle_res = await supabase.table("battles").select(PROFILE_EXISTS).eq("id", battle_id).execute()
-        if not battle_res.data:
-            raise HTTPException(status_code=404, detail="Battle not found")
-
-        # Update status
-        # NOTE: 'archived' status is not supported by DB constraint yet.
-        # Workaround: DELETE the battle to remove it from view.
-        await supabase.table("battles").delete().eq("id", battle_id).execute()
-        return {"status": "archived"}
 
     @staticmethod
     async def create_rematch(battle_id: str, user_id: str):

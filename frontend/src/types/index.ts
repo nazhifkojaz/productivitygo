@@ -6,6 +6,8 @@
  */
 
 export * from './adventure';
+export * from './arena';
+export * from './lobby';
 export * from './monster';
 export * from './task';
 export * from './profile';

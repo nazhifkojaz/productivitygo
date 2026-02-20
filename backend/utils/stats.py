@@ -4,7 +4,6 @@ Shared utility for stats calculations.
 REFACTOR-002: Extracted from routers/battles.py and routers/users.py
 to provide single source of truth for win rate calculation.
 """
-from typing import Union
 
 
 def calculate_win_rate(wins: int, total: int) -> float:

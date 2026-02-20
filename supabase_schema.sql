@@ -130,11 +130,32 @@ create policy "Users can manage their own tasks."
 
 -- TRIGGER FOR NEW USERS ------------------------------------------------------
 -- Automatically create a profile entry when a new user signs up via Supabase Auth
+-- Handles both Google (full_name) and Twitter (user_name) OAuth providers
+-- Adds numbered suffix if username already exists
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  base_username text;
+  final_username text;
+  counter int := 1;
 begin
+  -- Try Twitter's user_name first, then Google's full_name, then email prefix
+  base_username := coalesce(
+    new.raw_user_meta_data->>'user_name',   -- Twitter/X
+    new.raw_user_meta_data->>'full_name',   -- Google
+    split_part(new.email, '@', 1)           -- Fallback to email prefix
+  );
+
+  final_username := base_username;
+
+  -- Append number if username already exists
+  while exists (select 1 from profiles where username = final_username) loop
+    counter := counter + 1;
+    final_username := base_username || counter;
+  end loop;
+
   insert into public.profiles (id, email, username)
-  values (new.id, new.email, new.raw_user_meta_data->>'full_name');
+  values (new.id, new.email, final_username);
   return new;
 end;
 $$ language plpgsql security definer;
