@@ -68,7 +68,7 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             {[
-              { icon: Target, title: "SLAY MONSTERS", desc: "Defeat task monsters by completing your daily goals", bgColor: "var(--color-landing-coral)" },
+              { icon: Target, title: "SLAY MONSTERS", desc: "Go on adventures, defeat monsters by completing your daily tasks!", bgColor: "var(--color-landing-coral)" },
               { icon: Zap, title: "BATTLE RIVALS", desc: "Challenge friends to productivity duels", bgColor: "var(--color-landing-teal)" },
               { icon: Trophy, title: "EARN REWARDS", desc: "Unlock achievements and level up", bgColor: "var(--color-landing-mint)" }
             ].map((feature, i) => (
@@ -107,23 +107,17 @@ export default function LandingPage() {
           >
             <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center">
               <div className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-landing-yellow border-4 border-black flex items-center justify-center flex-shrink-0">
-                <div className="text-center">
-                  <div className="text-4xl sm:text-5xl md:text-6xl font-bold text-black">99</div>
-                  <div className="text-xs sm:text-sm font-bold text-black">LVL</div>
-                </div>
+                <img
+                  src="https://pbs.twimg.com/profile_images/1981334268497321984/N1K60iL1_400x400.jpg"  // Place in frontend/public/
+                  alt="Creator photo"
+                  className="w-48 h-48 border-4 border-black object-cover flex-shrink-0"
+                />
               </div>
               <div className="flex-1">
                 <h2 className="text-3xl sm:text-4xl font-bold text-black mb-4 sm:mb-6 tracking-tighter">ABOUT THE CREATOR</h2>
                 <p className="text-base sm:text-lg md:text-xl text-black/90 mb-4 sm:mb-6 leading-relaxed">
-                  Hey there! I'm the indie developer behind ProductivityGO. I built this platform because I believe productivity shouldn't be boring—it should be an adventure!
+                  Hey there! I built this platform because I wanted to turn the boring "tick your to-do list" routine into something actually fun. So I gamify it! Complete tasks, slay monsters, and battle your friends along the way!
                 </p>
-                <div className="flex flex-wrap gap-2 sm:gap-3">
-                  {["JavaScript", "React", "Python", "FastAPI", "Supabase"].map((skill) => (
-                    <span key={skill} className="bg-black text-white px-3 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm font-bold">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
               </div>
             </div>
           </motion.div>
@@ -145,7 +139,7 @@ export default function LandingPage() {
               Love ProductivityGO? Buy me a coffee to keep the adventure going!
             </p>
             <a
-              href="https://www.buymeacoffee.com/yourusername"
+              href="https://www.buymeacoffee.com/nazhifkojaz"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-block bg-landing-coral text-white text-base sm:text-lg md:text-xl font-bold px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 border-4 border-black hover:bg-black hover:text-white transition-all"
@@ -161,10 +155,10 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
           <div className="text-xl sm:text-2xl font-bold">PRODUCTIVITYGO</div>
           <div className="flex items-center gap-4 sm:gap-6">
-            <a href="#" className="hover:text-landing-yellow transition-colors" aria-label="GitHub">
+            <a href="https://github.com/nazhifkojaz" className="hover:text-landing-yellow transition-colors" aria-label="GitHub">
               <Github className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" />
             </a>
-            <a href="#" className="hover:text-landing-yellow transition-colors" aria-label="Twitter">
+            <a href="https://x.com/nazhifkojaz" className="hover:text-landing-yellow transition-colors" aria-label="Twitter">
               <Twitter className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" />
             </a>
           </div>
